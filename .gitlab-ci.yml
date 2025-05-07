@@ -1,6 +1,11 @@
+# .gitlab-ci.yml
+
 stages:
   - build
   - release
+
+variables:
+  PACKAGE_NAME: ${CI_PROJECT_NAME}
 
 build_and_pack:
   stage: build
@@ -12,14 +17,26 @@ build_and_pack:
     paths:
       - node_modules/
     policy: pull-push
-
   script:
-    - echo "Installing dependencies..."
+    - echo "Установка зависимостей..."
     - npm ci
-
-    - echo "Packing..."
+    - echo "Сборка и упаковка библиотеки (npm pack)..."
     - npm pack
+    # Если вы планируете создавать .zip архивы на этом этапе,
+    # они должны быть созданы в корневой директории проекта,
+    # чтобы быть захваченными artifacts:paths.
 
+    - |
+      echo "DEBUG (build_and_pack): Содержимое текущей директории перед созданием артефактов:"
+    - ls -lah
+    - |
+      echo "DEBUG (build_and_pack): Поиск *.tgz файлов:"
+    - |
+      ls -lah *.tgz || echo "DEBUG (build_and_pack): *.tgz файлы не найдены командой ls"
+    - |
+      echo "DEBUG (build_and_pack): Поиск *.zip файлов (если созданы):"
+    - |
+      ls -lah *.zip || echo "DEBUG (build_and_pack): *.zip файлы не найдены командой ls"
   artifacts:
     paths:
       - '*.tgz'
@@ -28,16 +45,19 @@ build_and_pack:
 
 release_job:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  # Используем официальный образ GitLab CLI, который содержит 'glab'
+  image: registry.gitlab.com/gitlab-org/cli:latest
   rules:
     - if: $CI_COMMIT_TAG =~ /^v.*/
   script:
-    # --- Отладка в release_job ---
+    - |
+      echo "--- Отладка в release_job: Начало ---"
     - |
       echo "DEBUG (release_job): Текущая директория: $(pwd)"
     - |
-      echo "DEBUG (release_job): Содержимое текущей директории (корень рабочей области) ПОСЛЕ загрузки артефактов:"
-    - ls -lah
+      echo "DEBUG (release_job): Содержимое текущей директории ПОСЛЕ загрузки артефактов:"
+    - |
+      ls -lah
     - |
       echo "DEBUG (release_job): Поиск *.tgz файлов командой ls:"
     - |
@@ -47,39 +67,54 @@ release_job:
     - |
       ls -lah *.zip || echo "DEBUG (release_job): *.zip файлы не найдены командой ls"
     - |
-      echo "DEBUG (release_job): Поиск *.tgz файлов командой find (рекурсивно):"
-    - |
-      find . -name "*.tgz" -print || echo "DEBUG (release_job): *.tgz файлы не найдены командой find"
-    - |
-      echo "DEBUG (release_job): Поиск *.zip файлов командой find (рекурсивно):"
-    - |
-      find . -name "*.zip" -print || echo "DEBUG (release_job): *.zip файлы не найдены командой find"
-    # --- Конец отладки в release_job ---
+      echo "--- Отладка в release_job: Конец списка файлов ---"
+
     - echo "Подготовка описания релиза..."
-    - |
-      RELEASE_DESCRIPTION="Релиз создан для тега $CI_COMMIT_TAG."
-      if [ -n "$CI_COMMIT_TAG_MESSAGE" ]; then
-        # Используем printf для безопасной вставки многострочных сообщений тега
-        RELEASE_DESCRIPTION=$(printf "%s\n\nСообщение тега:\n%s" "$RELEASE_DESCRIPTION" "$CI_COMMIT_TAG_MESSAGE")
-      fi
-      RELEASE_DESCRIPTION=$(printf "%s\n\nФайлы сборки прикреплены как артефакты." "$RELEASE_DESCRIPTION")
+    - printf "Релиз создан для тега %s." "$CI_COMMIT_TAG" > /tmp/release_notes.txt
+    - if [ -n "$CI_COMMIT_TAG_MESSAGE" ]; then
+    - printf "\n\nСообщение тега:\n%s" "$CI_COMMIT_TAG_MESSAGE" >> /tmp/release_notes.txt
+    - fi
+    - printf "\n\nФайлы сборки прикреплены как артефакты." >> /tmp/release_notes.txt
+    - RELEASE_NOTES_FILE="/tmp/release_notes.txt" # glab использует --notes или --notes-file / -F
 
     - |
-      echo "DEBUG (release_job): Сформированное описание релиза:"
-    - echo "$RELEASE_DESCRIPTION"
+      echo "DEBUG (release_job): Сформированное описание релиза (содержимое файла $RELEASE_NOTES_FILE):"
+    - cat "$RELEASE_NOTES_FILE"
     - echo "----------------------------------------------------"
 
-    - echo "Создание релиза GitLab для тега $CI_COMMIT_TAG..."
+    - echo "Подготовка списка файлов ассетов для glab..."
+    # Собираем все .tgz и .zip файлы в массив
+    # Использование process substitution < <(find ...) для более чистой передачи вывода find в цикл while
+    - ASSET_FILES_ARRAY=()
     - |
-      echo "DEBUG (release_job): Используемые пути для --assets-path:"
-    - echo "  --assets-path \"*.tgz\""
-    - echo "  --assets-path \"*.zip\""
+      while IFS= read -r -d $'\0' file; do
+        echo "DEBUG (release_job): Найден TGZ файл для релиза: '$file'"
+        ASSET_FILES_ARRAY+=("$file")
+      done < <(find . -maxdepth 1 -name "*.tgz" -print0)
 
-    - release-cli create --name "Release $CI_COMMIT_TAG" \
-      --tag-name $CI_COMMIT_TAG \
-      --description "$RELEASE_DESCRIPTION" \
-      --assets-path "*.tgz" \
-      --assets-path "*.zip"
+      while IFS= read -r -d $'\0' file; do
+        echo "DEBUG (release_job): Найден ZIP файл для релиза: '$file'"
+        ASSET_FILES_ARRAY+=("$file")
+      done < <(find . -maxdepth 1 -name "*.zip" -print0)
+
+      echo "DEBUG (release_job): Список файлов ассетов для glab: ${ASSET_FILES_ARRAY[*]}"
+
+    - echo "Создание релиза GitLab для тега $CI_COMMIT_TAG используя glab..."
+    # Команда: glab release create <tag> [файлы-ассеты...] --name <название> --notes-file <файл-с-описанием>
+    # Файлы-ассеты передаются как обычные аргументы после тега.
+    # glab должен автоматически использовать CI_JOB_TOKEN для аутентификации.
+    - |
+      if [ ${#ASSET_FILES_ARRAY[@]} -gt 0 ]; then
+        echo "DEBUG: glab release create будет вызван с ассетами: ${ASSET_FILES_ARRAY[*]}"
+        glab release create "$CI_COMMIT_TAG" "${ASSET_FILES_ARRAY[@]}" \
+          --name "Release $CI_COMMIT_TAG" \
+          --notes-file "$RELEASE_NOTES_FILE"
+      else
+        echo "DEBUG (release_job): Ассеты не найдены, создается релиз без ассетов."
+        glab release create "$CI_COMMIT_TAG" \
+          --name "Release $CI_COMMIT_TAG" \
+          --notes-file "$RELEASE_NOTES_FILE"
+      fi
   needs:
     - job: build_and_pack
       artifacts: true
