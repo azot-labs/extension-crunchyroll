@@ -85,7 +85,7 @@ release_job:
     - echo "Создание релиза GitLab для тега $CI_COMMIT_TAG используя glab..."
 
     - |
-      glab release create "$CI_COMMIT_TAG" "./dist/*.tgz" \
+      glab release create "$CI_COMMIT_TAG" "./*.tgz" \
           --name "Release $CI_COMMIT_TAG" \
           --notes-file "$RELEASE_NOTES_FILE"
   needs:
