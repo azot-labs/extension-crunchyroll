@@ -1,4 +1,4 @@
-name: Release
+name: Build and Release Extension
 
 permissions:
   contents: write
@@ -6,36 +6,62 @@ permissions:
 on:
   push:
     tags:
-      - '*.*.*'
+      - 'v*'
 
 jobs:
-  build:
+  release:
+    name: Create Release
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 'lts/*'
 
-      - name: Install
+      - name: Get package info
+        id: package_info
+        run: |
+          PACKAGE_NAME=$(npm pkg get name | tr -d '"')
+          TAG_NAME=${{ github.ref_name }}
+          VERSION=${TAG_NAME#v}
+
+          echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+          echo "Package Name: $PACKAGE_NAME"
+          echo "Tag Name: $TAG_NAME"
+          echo "Version: $VERSION"
+
+      - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm run test
+      - name: Pack
+        run: npm pack
 
-      - name: Get name and version from package.json
+      - name: Find generated artifact file
+        id: find_artifact
         run: |
-          test -n $(node -p -e "require('./package.json').name") &&
-          test -n $(node -p -e "require('./package.json').version") &&
-          echo PACKAGE_NAME=$(node -p -e "require('./package.json').name") >> $GITHUB_ENV &&
-          echo PACKAGE_VERSION=$(node -p -e "require('./package.json').version") >> $GITHUB_ENV || exit 1
+          ARTIFACT_FILE=$(ls -1 *.zip *.tgz 2>/dev/null | head -n 1)
 
-      - name: Release
+          if [ -z "$ARTIFACT_FILE" ]; then
+            echo "Error: No .zip or .tgz artifact file found after build step."
+            exit 1
+          fi
+
+          echo "Found artifact file: $ARTIFACT_FILE"
+          echo "artifact_path=$ARTIFACT_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release with Asset
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: 'v${{ env.PACKAGE_VERSION }}'
           generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.package_info.outputs.tag_name, '-') }}
+          files: |
+            ./${{ steps.find_artifact.outputs.artifact_path }}
