@@ -21,9 +21,11 @@ pack:
     - npm ci
   script:
     - npm pack
-    - ARTIFACT_FILES=$(ls *.zip *.tgz *.stx 2>/dev/null)
+    - ARTIFACT_FILES=$(ls *.zip *.tgz *.stx 2>/dev/null || true)
     - |
       if [ -z "$ARTIFACT_FILES" ]; then echo "Error: No artifacts found."; exit 1; fi
+    - |
+      echo "Found artifacts: $ARTIFACT_FILES"
     - |
       for file in $ARTIFACT_FILES; do
         curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
