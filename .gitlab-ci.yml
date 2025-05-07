@@ -3,50 +3,81 @@ stages:
   - release
 
 variables:
-  ARTIFACT_NAME: ''
+  ARTIFACT_FILE_PATTERN: '*.zip *.tgz *.stx'
+  RELEASE_CLI_IMAGE: registry.gitlab.com/gitlab-org/release-cli:latest
 
-cache:
-  paths:
-    - node_modules/
-
-pack:
+build_extension:
   stage: build
   image: node:lts
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^v/
-    - when: manual
-      allow_failure: false
   script:
     - npm ci
     - npm pack
-    - export ARTIFACT_FILES=$(find . -maxdepth 1 -type f \( -name "*.tgz" -o -name "*.zip" -o -name "*.stx" \) -printf "%f\n" | tr '\n' ' ')
-    - echo "ARTIFACT_FILES=${ARTIFACT_FILES}" > artifact.env
+
+    - echo "--- Поиск сгенерированных файлов артефактов ---"
+    # Находим все файлы по паттерну и сохраняем их список, по одному файлу на строку
+    - ls -1 $ARTIFACT_FILE_PATTERN 2>/dev/null > artifact_filenames.txt
+    - | # Используем мультистрочный скрипт
+      if [ ! -s artifact_filenames.txt ]; then
+        echo "Error: Файлы артефактов не найдены по паттерну '$ARTIFACT_FILE_PATTERN'."
+        exit 1 # Ошибка, если ни одного файла не найдено
+      fi
+    - echo "Найденные файлы артефактов:"
+    - cat artifact_filenames.txt
+
+    - echo "--- Получение информации о пакете ---"
+    # Получаем имя пакета из package.json
+    - PACKAGE_NAME=$(node -p "require('./package.json').name")
+    # Сохраняем имя пакета в файл, чтобы передать его в следующий этап
+    - echo "$PACKAGE_NAME" > package_name.txt
+    - echo "Имя пакета: $PACKAGE_NAME"
+
   artifacts:
     paths:
-      - '*.tgz'
-      - '*.zip'
-      - '*.stx'
-    reports:
-      dotenv: artifact.env
-    access: all
+      # Собираем все файлы, соответствующие паттерну
+      - $ARTIFACT_FILE_PATTERN
+      # Собираем файл со списком имен артефактов
+      - artifact_filenames.txt
+      # Собираем файл с именем пакета
+      - package_name.txt
+    expire_in: 1 week # Настройте срок хранения артефактов при необходимости
 
-release:
+# Job для создания релиза с использованием gitlab-release-cli
+create_release:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
-  needs: ['pack']
+  image: $RELEASE_CLI_IMAGE
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v/
+    - if: $CI_COMMIT_TAG
+
   script:
-    - echo "Preparing release for $CI_COMMIT_TAG"
-  release:
-    name: '$CI_COMMIT_TAG'
-    tag_name: '$CI_COMMIT_TAG'
-    description: |
-      Release ${CI_COMMIT_TAG}
-      Artifacts: ${ARTIFACT_FILES}
-    assets:
-      links:
-        - name: 'Package'
-          url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/$ARTIFACT_NAME'
+    - echo "--- Preparing release ---"
+    - PACKAGE_NAME=$(cat package_name.txt)
+    - ARTIFACT_FILE_LIST_FILE="artifact_filenames.txt"
+    - TAG_NAME=$CI_COMMIT_TAG
+    - VERSION=$(echo "$TAG_NAME" | sed 's/^v//')
+
+    - 'echo "Package name: $PACKAGE_NAME"'
+    - 'echo "Tag: $TAG_NAME"'
+    - 'echo "Version: $VERSION"'
+    - echo "Artifacts (from list):"
+    - cat $ARTIFACT_FILE_LIST_FILE
+
+    - ASSETS_ARGS=""
+    - 'while IFS= read -r filename; do
+      if [ -n "$filename" ]; then
+      DOWNLOAD_URL="${CI_PROJECT_URL}/-/releases/${TAG_NAME}/downloads/${filename}"
+      ASSETS_ARGS="$ASSETS_ARGS --assets-link \"$filename;$DOWNLOAD_URL;$filename\""
+      echo "-> Added asset: $filename"
+      fi
+      done < "$ARTIFACT_FILE_LIST_FILE"'
+
+    - echo "--- Creating release ---"
+
+    - 'release-cli create \
+      --tag-name $CI_COMMIT_TAG \
+      --name $CI_COMMIT_TAG \
+      --description "Release $CI_COMMIT_TAG" \
+      --ref $CI_COMMIT_SHA \
+      $ASSETS_ARGS'
+
   dependencies:
-    - pack
+    - build_extension
