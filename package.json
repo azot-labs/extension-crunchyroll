@@ -14,7 +14,7 @@
     "dev": "stx dev",
     "build": "stx build",
     "postinstall": "npm run build",
-    "prepublishOnly": "npm run build",
+    "prepack": "npm run build",
     "test": "vitest"
   },
   "files": [
