@@ -1,83 +1,36 @@
 stages:
-  - build
   - release
 
-variables:
-  ARTIFACT_FILE_PATTERN: '*.zip *.tgz *.stx'
-  RELEASE_CLI_IMAGE: registry.gitlab.com/gitlab-org/release-cli:latest
-
-build_extension:
-  stage: build
-  image: node:lts
+release:
+  stage: release
+  image: ubuntu:latest
+  only:
+    - tags /^v.*/
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+    - apt-get install -y nodejs
+    - curl --location "https://gitlab.com/api/v4/projects/gitlab-org%2Frelease-cli/-/packages/generic/release-cli/latest/release-cli-linux-amd64" --output /usr/local/bin/release-cli
+    - chmod +x /usr/local/bin/release-cli
   script:
+    - PACKAGE_NAME=$(npm pkg get name | tr -d '"')
+    - TAG_NAME=$CI_COMMIT_TAG
+    - VERSION=${TAG_NAME#v}
+    - 'echo "Package Name: $PACKAGE_NAME"'
+    - 'echo "Tag Name: $TAG_NAME"'
+    - 'echo "Version: $VERSION"'
     - npm ci
     - npm pack
-
-    - echo "--- Поиск сгенерированных файлов артефактов ---"
-    # Находим все файлы по паттерну и сохраняем их список, по одному файлу на строку
-    - ls -1 $ARTIFACT_FILE_PATTERN 2>/dev/null > artifact_filenames.txt
-    - | # Используем мультистрочный скрипт
-      if [ ! -s artifact_filenames.txt ]; then
-        echo "Error: Файлы артефактов не найдены по паттерну '$ARTIFACT_FILE_PATTERN'."
-        exit 1 # Ошибка, если ни одного файла не найдено
-      fi
-    - echo "Найденные файлы артефактов:"
-    - cat artifact_filenames.txt
-
-    - echo "--- Получение информации о пакете ---"
-    # Получаем имя пакета из package.json
-    - PACKAGE_NAME=$(node -p "require('./package.json').name")
-    # Сохраняем имя пакета в файл, чтобы передать его в следующий этап
-    - echo "$PACKAGE_NAME" > package_name.txt
-    - echo "Имя пакета: $PACKAGE_NAME"
-
-  artifacts:
-    paths:
-      # Собираем все файлы, соответствующие паттерну
-      - $ARTIFACT_FILE_PATTERN
-      # Собираем файл со списком имен артефактов
-      - artifact_filenames.txt
-      # Собираем файл с именем пакета
-      - package_name.txt
-    expire_in: 1 week # Настройте срок хранения артефактов при необходимости
-
-# Job для создания релиза с использованием gitlab-release-cli
-create_release:
-  stage: release
-  image: $RELEASE_CLI_IMAGE
-  rules:
-    - if: $CI_COMMIT_TAG
-
-  script:
-    - echo "--- Preparing release ---"
-    - PACKAGE_NAME=$(cat package_name.txt)
-    - ARTIFACT_FILE_LIST_FILE="artifact_filenames.txt"
-    - TAG_NAME=$CI_COMMIT_TAG
-    - VERSION=$(echo "$TAG_NAME" | sed 's/^v//')
-
-    - 'echo "Package name: $PACKAGE_NAME"'
-    - 'echo "Tag: $TAG_NAME"'
-    - 'echo "Version: $VERSION"'
-    - echo "Artifacts (from list):"
-    - cat $ARTIFACT_FILE_LIST_FILE
-
-    - ASSETS_ARGS=""
-    - 'while IFS= read -r filename; do
-      if [ -n "$filename" ]; then
-      DOWNLOAD_URL="${CI_PROJECT_URL}/-/releases/${TAG_NAME}/downloads/${filename}"
-      ASSETS_ARGS="$ASSETS_ARGS --assets-link \"$filename;$DOWNLOAD_URL;$filename\""
-      echo "-> Added asset: $filename"
-      fi
-      done < "$ARTIFACT_FILE_LIST_FILE"'
-
-    - echo "--- Creating release ---"
-
-    - 'release-cli create \
-      --tag-name $CI_COMMIT_TAG \
-      --name $CI_COMMIT_TAG \
-      --description "Release $CI_COMMIT_TAG" \
-      --ref $CI_COMMIT_SHA \
-      $ASSETS_ARGS'
-
-  dependencies:
-    - build_extension
+    - ARTIFACT_FILE=$(ls -1 *.zip *.tgz 2>/dev/null | head -n 1)
+    - 'if [ -z "$ARTIFACT_FILE" ]; then echo "Error: No .zip or .tgz artifact file found after build step."; exit 1; fi'
+    - 'echo "Found artifact file: $ARTIFACT_FILE"'
+    - LAST_TAG=$(git describe --tags --abbrev=0 --match "v*" HEAD~1 || echo "")
+    - RELEASE_NOTES=$(git log --pretty=format:"- %s" $LAST_TAG..HEAD)
+    - IS_PRERELEASE=false
+    - if [[ "$TAG_NAME" == *-* ]]; then IS_PRERELEASE=true; fi
+    - |
+      release-cli create --name "Release $TAG_NAME" \
+        --tag-name "$TAG_NAME" \
+        --description "$RELEASE_NOTES" \
+        --assets-link "{\"name\":\"$ARTIFACT_FILE\",\"url\":\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID/artifacts/raw/$ARTIFACT_FILE\"}" \
+        --prerelease $IS_PRERELEASE
