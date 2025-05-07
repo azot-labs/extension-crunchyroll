@@ -28,47 +28,13 @@ release_job:
     - if: $CI_COMMIT_TAG =~ /^v.*/
   script:
     - |
-      echo "--- Отладка в release_job: Начало ---"
-    - |
-      echo "DEBUG (release_job): Текущая директория: $(pwd)"
-    - |
-      echo "DEBUG (release_job): Содержимое текущей директории ПОСЛЕ загрузки артефактов:"
-    - |
-      ls -lah
-    - |
-      echo "DEBUG (release_job): Поиск *.tgz файлов командой ls:"
-    - |
-      ls -lah *.tgz || echo "DEBUG (release_job): *.tgz файлы не найдены командой ls"
-    - |
-      echo "DEBUG (release_job): Поиск *.zip файлов командой ls:"
-    - |
-      ls -lah *.zip || echo "DEBUG (release_job): *.zip файлы не найдены командой ls"
-    - |
-      echo "--- Отладка в release_job: Конец списка файлов ---"
-
-    - echo "Подготовка описания релиза..."
-    - printf "Релиз создан для тега %s." "$CI_COMMIT_TAG" > /tmp/release_notes.txt
-    - if [ -n "$CI_COMMIT_TAG_MESSAGE" ]; then
-    - printf "\n\nСообщение тега:\n%s" "$CI_COMMIT_TAG_MESSAGE" >> /tmp/release_notes.txt
-    - fi
-    - printf "\n\nФайлы сборки прикреплены как артефакты." >> /tmp/release_notes.txt
-    - RELEASE_NOTES_FILE="/tmp/release_notes.txt" # glab использует --notes или --notes-file / -F
-
-    - |
-      echo "DEBUG (release_job): Сформированное описание релиза (содержимое файла $RELEASE_NOTES_FILE):"
-    - cat "$RELEASE_NOTES_FILE"
-    - echo "----------------------------------------------------"
-
-    - echo "Создание релиза GitLab для тега $CI_COMMIT_TAG используя glab..."
-    - |
       echo "Variable GLAB_TOKEN length: ${#GLAB_TOKEN}"
     - if [ -z "$GLAB_TOKEN" ]; then echo "GLAB_TOKEN не установлена!"; exit 1; else echo "GLAB_TOKEN установлена"; fi
     - |
       glab auth login --hostname gitlab.com --token "$GLAB_TOKEN" --api-protocol https
     - |
       glab release create "$CI_COMMIT_TAG" *.tgz \
-          --name "Release $CI_COMMIT_TAG" \
-          --notes-file "$RELEASE_NOTES_FILE"
+          --name "$CI_COMMIT_TAG"
   needs:
     - job: build_and_pack
       artifacts: true
