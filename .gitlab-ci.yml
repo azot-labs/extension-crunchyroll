@@ -50,8 +50,8 @@ release:
       when: on_success
     - when: manual
   script:
-    - ASSETS=()
+    - ASSETS=""
     - while read -r file; do
-      ASSETS+=("--assets-link" "{\"name\":\"$file\",\"url\":\"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/$file\"}")
+      ASSETS="$ASSETS --assets-link '{\"name\":\"$file\",\"url\":\"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/$file\"}'"
       done < artifacts.txt
-    - release-cli create --name "Release $CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "Release $CI_COMMIT_TAG created automatically. Includes bundled library packages." "${ASSETS[@]}"
+    - eval release-cli create --name "Release $CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "Release $CI_COMMIT_TAG created automatically. Includes bundled library packages." $ASSETS
