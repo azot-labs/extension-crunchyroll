@@ -60,7 +60,8 @@ release_job:
     - echo "----------------------------------------------------"
 
     - echo "Создание релиза GitLab для тега $CI_COMMIT_TAG используя glab..."
-    - printf "Token %s." "$GLAB_TOKEN"
+    - |
+      echo "Variable GLAB_TOKEN length: ${#GLAB_TOKEN}"
     - |
       glab auth login --hostname gitlab.com --token "$GLAB_TOKEN" --api-protocol https
     - |
