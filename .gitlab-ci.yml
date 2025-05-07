@@ -1,36 +1,51 @@
 stages:
+  - build
   - release
+
+variables:
+  ARTIFACT_NAME: ''
+
+cache:
+  paths:
+    - node_modules/
+
+pack:
+  stage: build
+  image: node:lts
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^v/
+      when: on_success
+    - when: manual
+      allow_failure: false
+  before_script:
+    - npm ci
+  script:
+    - npm pack
+    - export ARTIFACT_NAME=$(ls *.tgz)
+    - echo "ARTIFACT_NAME=${ARTIFACT_NAME}" > artifact.env
+  artifacts:
+    paths:
+      - '*.tgz'
+    reports:
+      dotenv: artifact.env
 
 release:
   stage: release
-  image: ubuntu:latest
-  only:
-    - tags /^v.*/
-  before_script:
-    - apt-get update && apt-get install -y curl
-    - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-    - apt-get install -y nodejs
-    - curl --location "https://gitlab.com/api/v4/projects/gitlab-org%2Frelease-cli/-/packages/generic/release-cli/latest/release-cli-linux-amd64" --output /usr/local/bin/release-cli
-    - chmod +x /usr/local/bin/release-cli
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs: ['pack']
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^v/
+      when: on_success
+    - when: manual
   script:
-    - PACKAGE_NAME=$(npm pkg get name | tr -d '"')
-    - TAG_NAME=$CI_COMMIT_TAG
-    - VERSION=${TAG_NAME#v}
-    - 'echo "Package Name: $PACKAGE_NAME"'
-    - 'echo "Tag Name: $TAG_NAME"'
-    - 'echo "Version: $VERSION"'
-    - npm ci
-    - npm pack
-    - ARTIFACT_FILE=$(ls -1 *.zip *.tgz 2>/dev/null | head -n 1)
-    - 'if [ -z "$ARTIFACT_FILE" ]; then echo "Error: No .zip or .tgz artifact file found after build step."; exit 1; fi'
-    - 'echo "Found artifact file: $ARTIFACT_FILE"'
-    - LAST_TAG=$(git describe --tags --abbrev=0 --match "v*" HEAD~1 || echo "")
-    - RELEASE_NOTES=$(git log --pretty=format:"- %s" $LAST_TAG..HEAD)
-    - IS_PRERELEASE=false
-    - if [[ "$TAG_NAME" == *-* ]]; then IS_PRERELEASE=true; fi
-    - |
-      release-cli create --name "Release $TAG_NAME" \
-        --tag-name "$TAG_NAME" \
-        --description "$RELEASE_NOTES" \
-        --assets-link "{\"name\":\"$ARTIFACT_FILE\",\"url\":\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID/artifacts/raw/$ARTIFACT_FILE\"}" \
-        --prerelease $IS_PRERELEASE
+    - echo "Creating release for $CI_COMMIT_TAG"
+  release:
+    name: '$CI_COMMIT_TAG'
+    tag_name: '$CI_COMMIT_TAG'
+    description: |
+      Release $CI_COMMIT_TAG created automatically.
+      Includes bundled library package.
+    assets:
+      links:
+        - name: '${ARTIFACT_NAME}'
+          url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/${ARTIFACT_NAME}'
