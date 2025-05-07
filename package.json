@@ -1,43 +1,27 @@
 {
-  "name": "@streamyx/crunchyroll",
-  "version": "0.0.21",
+  "name": "@streamyx/extension-crunchyroll",
+  "version": "0.1.10",
   "author": "Vitaly Gashkov <vitalygashkov@vk.com>",
-  "description": "Crunchyroll plugin for Streamyx",
-  "license": "AGPL-3.0",
+  "description": "World’s largest dedicated anime library",
+  "config": {
+    "iconUrl": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/d6/8e/2c/d68e2cd5-885f-1e93-026f-fdefcd8bf6f0/AppIcon-0-0-1x_U007emarketing-0-10-0-85-220.png/460x0w.webp"
+  },
+  "license": "MIT",
   "main": "dist/crunchyroll.js",
-  "module": "dist/crunchyroll.mjs",
-  "types": "dist/crunchyroll.d.ts",
   "scripts": {
-    "build": "tsup crunchyroll.ts --format esm,cjs --dts --tsconfig tsconfig.json --clean --minify",
+    "dev": "stx dev",
+    "build": "stx build",
     "postinstall": "npm run build",
-    "prepack": "npm run build",
-    "postpack": "tar2zip *.tgz",
-    "dev": "tsc --watch -p ./tsconfig.json",
+    "prepublishOnly": "npm run build",
     "test": "vitest"
   },
   "files": [
     "dist"
   ],
-  "exports": {
-    ".": {
-      "import": {
-        "types": "./dist/crunchyroll.d.mts",
-        "default": "./dist/crunchyroll.mjs"
-      },
-      "require": {
-        "types": "./dist/crunchyroll.d.ts",
-        "default": "./dist/crunchyroll.js"
-      }
-    }
-  },
-  "dependencies": {
-    "@streamyx/core": "^2.1.1"
-  },
   "devDependencies": {
+    "@streamyx/api": "^0.2.8",
     "@types/node": "^22.7.5",
-    "tar-to-zip": "^3.0.0",
     "tsup": "^8.3.0",
-    "tsx": "^4.19.1",
     "typescript": "^5.6.3",
     "vitest": "^2.1.3"
   }

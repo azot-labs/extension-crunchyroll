@@ -1,131 +1,135 @@
-import type { StreamyxCore } from '@streamyx/core';
-import type { AuthState, CmsAuthResponse } from './types';
-import { DEVICE, ROUTES } from './constants';
+import type { CmsAuthResponse } from './types';
+import { createBasicToken, DEVICE, ROUTES, USER_AGENT } from './constants';
 
 export const HEADERS = {
   authorization: DEVICE.authorization,
   'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-  'User-Agent': DEVICE.userAgent,
+  'User-Agent': USER_AGENT,
+};
+
+const fetchProductionSecret = async () => {
+  const text = await fetch(ROUTES.bundle).then((res) => res.text());
+  const tokens = text.match(/prod="([\w-]+:[\w-]+)"/);
+  if (!tokens) {
+    console.error('Failed to find production secret');
+    return null;
+  }
+  const [id, secret] = tokens[1].split(':');
+  return { id, secret };
+};
+
+export const updateAuthorizationHeader = async () => {
+  const result = await fetchProductionSecret();
+  if (!result) return;
+  const { id, secret } = result;
+  const basicToken = createBasicToken(id, secret);
+  HEADERS.authorization = `Basic ${basicToken}`;
 };
 
 const buildRequestOptions = (params: Record<string, string>) => {
   return { method: 'POST', body: new URLSearchParams(params).toString(), headers: HEADERS };
 };
 
-export const createAuth = (core: StreamyxCore) => {
-  const promptCredentials = async () => {
-    const { username, password } = await core.prompt.ask({
-      username: { label: 'Username' },
-      password: { label: 'Password' },
+const promptCredentials = async () => {
+  const { username, password } = await question.ask({
+    username: { label: 'Username' },
+    password: { label: 'Password' },
+  });
+  return { username, password };
+};
+
+const fetchCmsAuth = async (accessToken: string) => {
+  const requestOptions = { method: 'GET', headers: { authorization: `Bearer ${accessToken}` } };
+  const response = await fetch(ROUTES.index, requestOptions);
+  if (response.status !== 200) {
+    console.error(`Can't get CMS token. Status code: ${response.status}`);
+    console.debug(await response.text());
+    return;
+  }
+  return (await response.json()) as CmsAuthResponse;
+};
+
+const checkToken = () => {
+  const TIME_MARGIN = 60000;
+  const hasToken =
+    !!localStorage.getItem('accessToken') &&
+    !!localStorage.getItem('refreshToken') &&
+    !!localStorage.getItem('cmsAuth');
+  const isTokenExpired = hasToken && Number(localStorage.getItem('expires')) - TIME_MARGIN < new Date().getTime();
+  return { hasToken, isTokenExpired };
+};
+
+const fetchToken = async (params: Record<string, string>) => {
+  try {
+    const deviceId = localStorage.getItem('deviceId') || DEVICE.id;
+    const deviceType = localStorage.getItem('deviceType') || DEVICE.type;
+    const options = buildRequestOptions({
+      ...params,
+      scope: 'offline_access',
+      device_id: deviceId,
+      device_type: deviceType,
     });
-    return { username, password };
-  };
-
-  const fetchCmsAuth = async (accessToken: string) => {
-    const requestOptions = { method: 'GET', headers: { authorization: `Bearer ${accessToken}` } };
-    const response = await core.http.fetch(ROUTES.index, requestOptions);
-    if (response.status !== 200) {
-      core.log.error(`Can't get CMS token. Status code: ${response.status}`);
-      core.log.debug(await response.text());
-      return;
+    const response = await fetch(ROUTES.token, options);
+    const auth: any = await response.json();
+    const error = auth.error || response.status !== 200;
+    if (error) {
+      console.error(`Can't get token. Status code: ${response.status}. Message: ${auth.error}. Logging out...`);
+      console.debug(JSON.stringify(auth));
+      await signOut();
+      await signIn();
+    } else {
+      const cmsAuth = await fetchCmsAuth(auth.access_token);
+      localStorage.setItem('accessToken', auth.access_token);
+      localStorage.setItem('refreshToken', auth.refresh_token);
+      localStorage.setItem('expires', String(new Date().getTime() + auth.expires_in * 1000));
+      localStorage.setItem('tokenType', auth.token_type);
+      localStorage.setItem('scope', auth.scope);
+      localStorage.setItem('country', auth.country);
+      localStorage.setItem('accountId', auth.account_id);
+      localStorage.setItem('cookies', http.headers.cookie);
+      localStorage.setItem('cmsAuth', JSON.stringify(cmsAuth));
+      localStorage.setItem('deviceId', deviceId);
+      localStorage.setItem('deviceType', deviceType);
+      http.setHeader('authorization', `Bearer ${auth.accessToken}`);
     }
-    return (await response.json()) as CmsAuthResponse;
-  };
+  } catch (e: any) {
+    console.debug(`Auth failed: ${e.message}`);
+    process.exit(1);
+  }
+};
 
-  return {
-    checkToken() {
-      const TIME_MARGIN = 60000;
-      const hasToken =
-        !!core.store.state.accessToken &&
-        !!core.store.state.refreshToken &&
-        !!core.store.state.cmsAuth?.cms;
-      const isTokenExpired =
-        hasToken && Number(core.store.state.expires) - TIME_MARGIN < new Date().getTime();
-      return { hasToken, isTokenExpired };
-    },
+const fetchAccessToken = (username: string, password: string) => {
+  return fetchToken({ grant_type: 'password', username, password });
+};
 
-    async fetchToken(params: Record<string, string>) {
-      try {
-        const deviceId = core.store.state.deviceId || DEVICE.id;
-        const deviceType = core.store.state.deviceType || DEVICE.type;
-        const options = buildRequestOptions({
-          ...params,
-          scope: 'offline_access',
-          device_id: deviceId,
-          device_type: deviceType,
-        });
-        const response = await core.http.fetch(ROUTES.token, options);
-        const auth: any = await response.json();
-        const error = auth.error || response.status !== 200;
-        if (error) {
-          core.log.error(
-            `Can't get token. Status code: ${response.status}. Message: ${auth.error}. Logging out...`
-          );
-          core.log.debug(JSON.stringify(auth));
-          await this.signOut();
-          await this.signIn();
-        } else {
-          const cmsAuth = await fetchCmsAuth(auth.access_token);
-          const newState: AuthState = {
-            accessToken: auth.access_token,
-            refreshToken: auth.refresh_token,
-            expires: new Date().getTime() + auth.expires_in * 1000,
-            tokenType: auth.token_type,
-            scope: auth.scope,
-            country: auth.country,
-            accountId: auth.account_id,
-            cookies: core.http.headers.cookie,
-            cmsAuth,
-            deviceId,
-            deviceType,
-          };
-          core.http.setHeader('authorization', `Bearer ${newState.accessToken}`);
-          await core.store.setState(newState);
-          return newState;
-        }
-      } catch (e: any) {
-        core.log.debug(`Auth failed: ${e.message}`);
-        process.exit(1);
-      }
-    },
+const fetchRefreshToken = (refreshToken: string) => {
+  return fetchToken({ grant_type: 'refresh_token', refresh_token: refreshToken });
+};
 
-    async fetchAccessToken(username: string, password: string) {
-      return this.fetchToken({ grant_type: 'password', username, password });
-    },
+export const signIn = async (username?: string, password?: string) => {
+  http.setHeader('authorization', `Bearer ${localStorage.getItem('accessToken')}`);
+  const { hasToken, isTokenExpired } = checkToken();
+  if (!hasToken) {
+    localStorage.removeItem('deviceId');
+    localStorage.removeItem('deviceType');
+    console.debug(`Requesting credentials`);
+    const credentials = username && password ? { username, password } : await promptCredentials();
+    console.debug(`Requesting token`);
+    await fetchAccessToken(credentials.username, credentials.password);
+  } else if (isTokenExpired) {
+    console.debug(`Refreshing token`);
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) await fetchRefreshToken(refreshToken);
+  }
+};
 
-    async fetchRefreshToken(refreshToken: string) {
-      return this.fetchToken({ grant_type: 'refresh_token', refresh_token: refreshToken });
-    },
+export const signOut = async () => {
+  http.setHeader('authorization', '');
+  localStorage.clear();
+};
 
-    async signIn(username?: string, password?: string) {
-      await core.store.getState();
-      core.http.setHeader('authorization', `Bearer ${core.store.state.accessToken}`);
-      const { hasToken, isTokenExpired } = this.checkToken();
-      if (!hasToken) {
-        core.log.debug(`Requesting credentials`);
-        const credentials =
-          username && password ? { username, password } : await promptCredentials();
-        core.log.debug(`Requesting token`);
-        await this.fetchAccessToken(credentials.username, credentials.password);
-      } else if (isTokenExpired) {
-        core.log.debug(`Refreshing token`);
-        if (core.store.state.refreshToken)
-          await this.fetchRefreshToken(core.store.state.refreshToken);
-      }
-    },
-
-    async signOut() {
-      core.http.setHeader('authorization', '');
-      await core.store.setState({
-        accessToken: '',
-        refreshToken: '',
-        expires: 0,
-        tokenType: '',
-        deviceId: '',
-        deviceType: '',
-      });
-    },
-  };
+export const createAuth = () => {
+  return {};
 };
 
 export type Auth = ReturnType<typeof createAuth>;

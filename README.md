@@ -1,1 +1,3 @@
-Package is now in [streamyx-extensions](https://github.com/vitalygashkov/streamyx-extensions/tree/main/extensions/crunchyroll)
+# @streamyx/extension-crunchyroll
+
+This extension is built-in and can be used without installation.
