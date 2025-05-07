@@ -82,39 +82,12 @@ release_job:
     - cat "$RELEASE_NOTES_FILE"
     - echo "----------------------------------------------------"
 
-    - echo "Подготовка списка файлов ассетов для glab..."
-    # Собираем все .tgz и .zip файлы в массив
-    # Использование process substitution < <(find ...) для более чистой передачи вывода find в цикл while
-    - ASSET_FILES_ARRAY=()
-    - |
-      while IFS= read -r -d $'\0' file; do
-        echo "DEBUG (release_job): Найден TGZ файл для релиза: '$file'"
-        ASSET_FILES_ARRAY+=("$file")
-      done < <(find . -maxdepth 1 -name "*.tgz" -print0)
-
-      while IFS= read -r -d $'\0' file; do
-        echo "DEBUG (release_job): Найден ZIP файл для релиза: '$file'"
-        ASSET_FILES_ARRAY+=("$file")
-      done < <(find . -maxdepth 1 -name "*.zip" -print0)
-
-      echo "DEBUG (release_job): Список файлов ассетов для glab: ${ASSET_FILES_ARRAY[*]}"
-
     - echo "Создание релиза GitLab для тега $CI_COMMIT_TAG используя glab..."
-    # Команда: glab release create <tag> [файлы-ассеты...] --name <название> --notes-file <файл-с-описанием>
-    # Файлы-ассеты передаются как обычные аргументы после тега.
-    # glab должен автоматически использовать CI_JOB_TOKEN для аутентификации.
+
     - |
-      if [ ${#ASSET_FILES_ARRAY[@]} -gt 0 ]; then
-        echo "DEBUG: glab release create будет вызван с ассетами: ${ASSET_FILES_ARRAY[*]}"
-        glab release create "$CI_COMMIT_TAG" "${ASSET_FILES_ARRAY[@]}" \
+      glab release create "$CI_COMMIT_TAG" "./dist/*.tgz" \
           --name "Release $CI_COMMIT_TAG" \
           --notes-file "$RELEASE_NOTES_FILE"
-      else
-        echo "DEBUG (release_job): Ассеты не найдены, создается релиз без ассетов."
-        glab release create "$CI_COMMIT_TAG" \
-          --name "Release $CI_COMMIT_TAG" \
-          --notes-file "$RELEASE_NOTES_FILE"
-      fi
   needs:
     - job: build_and_pack
       artifacts: true
