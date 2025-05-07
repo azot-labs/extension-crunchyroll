@@ -1,6 +1,6 @@
 {
   "name": "@streamyx/extension-crunchyroll",
-  "version": "0.1.27",
+  "version": "0.1.10",
   "author": "Vitaly Gashkov <vitalygashkov@vk.com>",
   "homepage": "https://www.crunchyroll.com",
   "config": {
