@@ -3,7 +3,7 @@ stages:
   - release
 
 variables:
-  ARTIFACT_NAME: ''
+  ARTIFACT_FILES: ''
 
 cache:
   paths:
@@ -21,17 +21,19 @@ pack:
     - npm ci
   script:
     - npm pack
-    - export ARTIFACT_NAME=$(ls *.tgz)
-    - echo "ARTIFACT_NAME=${ARTIFACT_NAME}" > artifact.env
+    - ARTIFACT_FILES=$(ls *.zip *.tgz *.stx 2>/dev/null)
     - |
-      curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
-           --upload-file "${ARTIFACT_NAME}" \
-           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/${ARTIFACT_NAME}"
+      if [ -z "$ARTIFACT_FILES" ]; then echo "Error: No artifacts found."; exit 1; fi
+    - |
+      for file in $ARTIFACT_FILES; do
+        curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+             --upload-file "$file" \
+             "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/$file"
+      done
+    - echo "$ARTIFACT_FILES" | tr ' ' '\n' > artifacts.txt
   artifacts:
     paths:
-      - '*.tgz'
-    reports:
-      dotenv: artifact.env
+      - artifacts.txt
 
 release:
   stage: release
@@ -42,14 +44,8 @@ release:
       when: on_success
     - when: manual
   script:
-    - echo "Creating release for $CI_COMMIT_TAG"
-  release:
-    name: '$CI_COMMIT_TAG'
-    tag_name: '$CI_COMMIT_TAG'
-    description: |
-      Release $CI_COMMIT_TAG created automatically.
-      Includes bundled library package.
-    assets:
-      links:
-        - name: '${ARTIFACT_NAME}'
-          url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/${ARTIFACT_NAME}'
+    - ASSETS=()
+    - while read -r file; do
+      ASSETS+=("--assets-link" "{\"name\":\"$file\",\"url\":\"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/$file\"}")
+      done < artifacts.txt
+    - release-cli create --name "Release $CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "Release $CI_COMMIT_TAG created automatically. Includes bundled library packages." "${ASSETS[@]}"
