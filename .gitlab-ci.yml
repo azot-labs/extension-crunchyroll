@@ -2,78 +2,55 @@ stages:
   - build
   - release
 
-variables:
-  ARTIFACT_FILES: ''
-
-cache:
-  paths:
-    - node_modules/
-
-pack:
+build_and_pack:
   stage: build
-  image: node:lts
-  rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^v/
-      when: on_success
-    - when: manual
-      allow_failure: false
-  before_script:
-    - npm ci
+  image: node:22
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - node_modules/
+    policy: pull-push
+
   script:
+    - echo "Installing dependencies..."
+    - npm ci
+
+    - echo "Packing..."
     - npm pack
-    - ARTIFACT_FILES=$(ls *.zip *.tgz *.stx 2>/dev/null || true)
-    - |
-      if [ -z "$ARTIFACT_FILES" ]; then
-        echo "Error: No artifacts found."
-        exit 1
-      fi
-    - |
-      echo "Found artifacts: $ARTIFACT_FILES"
-    - |
-      for file in $ARTIFACT_FILES; do
-        curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
-          --upload-file "$file" \
-          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/$file"
-      done
-    - |
-      echo "$ARTIFACT_FILES" | tr ' ' '\n' > artifacts.txt
+
   artifacts:
     paths:
-      - artifacts.txt
+      - '*.tgz'
+      - '*.zip'
+    expire_in: 1 week
 
-release:
+release_job:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
-  needs: ['pack']
   rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^v/
-      when: on_success
-    - when: manual
+    - if: $CI_COMMIT_TAG =~ /^v.*/
   script:
+    - echo "Preparing release..."
     - |
-      # Формируем базовую часть JSON
-      LINKS_JSON='['
+      RELEASE_DESCRIPTION="Релиз создан для тега $CI_COMMIT_TAG."
+      if [ -n "$CI_COMMIT_TAG_MESSAGE" ]; then
+        RELEASE_DESCRIPTION="$RELEASE_DESCRIPTION"$'\n\n'"Сообщение тега:"$'\n'"$CI_COMMIT_TAG_MESSAGE"
+      fi
+      RELEASE_DESCRIPTION="$RELEASE_DESCRIPTION"$'\n\n'"Файлы сборки прикреплены как артефакты."
 
-      # Добавляем стандартные исходники
-      LINKS_JSON+='{"name":"Source code (zip)","url":"'$CI_PROJECT_URL'/-/archive/'$CI_COMMIT_TAG'/'$CI_PROJECT_NAME'-'$CI_COMMIT_TAG'.zip"},'
-      LINKS_JSON+='{"name":"Source code (tar.gz)","url":"'$CI_PROJECT_URL'/-/archive/'$CI_COMMIT_TAG'/'$CI_PROJECT_NAME'-'$CI_COMMIT_TAG'.tar.gz"},'
+    - release-cli create --name "Release $CI_COMMIT_TAG" \
+      --tag-name $CI_COMMIT_TAG \
+      --description "$RELEASE_DESCRIPTION" \
+      --assets-path "*.tgz" \
+      --assets-path "*.zip"
+  needs:
+    - job: build_and_pack
+      artifacts: true
 
-      # Добавляем кастомные артефакты
-      while read -r file; do
-        LINKS_JSON+='{"name":"'$file'","url":"'$CI_API_V4_URL'/projects/'$CI_PROJECT_ID'/packages/generic/'$CI_PROJECT_NAME'/'$CI_COMMIT_TAG'/'$file'"},'
-      done < artifacts.txt
-
-      # Удаляем последнюю запятую и закрываем массив
-      LINKS_JSON="${LINKS_JSON%,}]"
-
-      # Создаем временный файл для JSON
-      echo "$LINKS_JSON" > links.json
-      echo "Generated JSON:"
-      cat links.json
-
-      # Создаем релиз
-      release-cli create \
-        --name "Release $CI_COMMIT_TAG" \
-        --tag-name "$CI_COMMIT_TAG" \
-        --description "Version $CI_COMMIT_TAG of $CI_PROJECT_NAME" \
-        --assets-json "$(cat links.json)"
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v.*/
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
