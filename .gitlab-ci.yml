@@ -56,6 +56,5 @@ release:
           url: '${CI_JOB_URL}/artifacts/download'
         - name: 'Direct artifact links'
           url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/'
-    prerelease: $([[ "$CI_COMMIT_TAG" =~ - ]] && echo "true" || echo "false")
   dependencies:
     - pack
