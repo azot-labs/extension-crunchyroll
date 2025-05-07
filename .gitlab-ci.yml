@@ -32,13 +32,48 @@ release_job:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v.*/
   script:
-    - echo "Preparing release..."
+    # --- Отладка в release_job ---
+    - |
+      echo "DEBUG (release_job): Текущая директория: $(pwd)"
+    - |
+      echo "DEBUG (release_job): Содержимое текущей директории (корень рабочей области) ПОСЛЕ загрузки артефактов:"
+    - ls -lah
+    - |
+      echo "DEBUG (release_job): Поиск *.tgz файлов командой ls:"
+    - |
+      ls -lah *.tgz || echo "DEBUG (release_job): *.tgz файлы не найдены командой ls"
+    - |
+      echo "DEBUG (release_job): Поиск *.zip файлов командой ls:"
+    - |
+      ls -lah *.zip || echo "DEBUG (release_job): *.zip файлы не найдены командой ls"
+    - |
+      echo "DEBUG (release_job): Поиск *.tgz файлов командой find (рекурсивно):"
+    - |
+      find . -name "*.tgz" -print || echo "DEBUG (release_job): *.tgz файлы не найдены командой find"
+    - |
+      echo "DEBUG (release_job): Поиск *.zip файлов командой find (рекурсивно):"
+    - |
+      find . -name "*.zip" -print || echo "DEBUG (release_job): *.zip файлы не найдены командой find"
+    # --- Конец отладки в release_job ---
+    - echo "Подготовка описания релиза..."
     - |
       RELEASE_DESCRIPTION="Релиз создан для тега $CI_COMMIT_TAG."
       if [ -n "$CI_COMMIT_TAG_MESSAGE" ]; then
-        RELEASE_DESCRIPTION="$RELEASE_DESCRIPTION"$'\n\n'"Сообщение тега:"$'\n'"$CI_COMMIT_TAG_MESSAGE"
+        # Используем printf для безопасной вставки многострочных сообщений тега
+        RELEASE_DESCRIPTION=$(printf "%s\n\nСообщение тега:\n%s" "$RELEASE_DESCRIPTION" "$CI_COMMIT_TAG_MESSAGE")
       fi
-      RELEASE_DESCRIPTION="$RELEASE_DESCRIPTION"$'\n\n'"Файлы сборки прикреплены как артефакты."
+      RELEASE_DESCRIPTION=$(printf "%s\n\nФайлы сборки прикреплены как артефакты." "$RELEASE_DESCRIPTION")
+
+    - |
+      echo "DEBUG (release_job): Сформированное описание релиза:"
+    - echo "$RELEASE_DESCRIPTION"
+    - echo "----------------------------------------------------"
+
+    - echo "Создание релиза GitLab для тега $CI_COMMIT_TAG..."
+    - |
+      echo "DEBUG (release_job): Используемые пути для --assets-path:"
+    - echo "  --assets-path \"*.tgz\""
+    - echo "  --assets-path \"*.zip\""
 
     - release-cli create --name "Release $CI_COMMIT_TAG" \
       --tag-name $CI_COMMIT_TAG \
