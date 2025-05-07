@@ -2,7 +2,7 @@
   "name": "@streamyx/extension-crunchyroll",
   "version": "0.1.10",
   "author": "Vitaly Gashkov <vitalygashkov@vk.com>",
-  "description": "World’s largest dedicated anime library",
+  "homepage": "https://www.crunchyroll.com",
   "config": {
     "name": "Crunchyroll",
     "tag": "CR",
