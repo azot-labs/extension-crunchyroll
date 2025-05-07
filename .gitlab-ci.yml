@@ -21,10 +21,8 @@ pack:
     - npm ci
   script:
     - npm pack
-    - export ARTIFACT_FILES=$(ls -1 *.tgz *.zip *.stx 2>/dev/null | tr '\n' ' ')
-    - if [ -z "$ARTIFACT_FILES" ]; then echo "No artifacts found!"; exit 1; fi
-    - echo "ARTIFACT_FILES=${ARTIFACT_FILES}" > artifact.env
-    - 'echo "Found artifacts: ${ARTIFACT_FILES}"'
+    - export ARTIFACT_NAME=$(ls *.tgz)
+    - echo "ARTIFACT_NAME=${ARTIFACT_NAME}" > artifact.env
   artifacts:
     paths:
       - '*.tgz'
@@ -47,14 +45,11 @@ release:
     name: '$CI_COMMIT_TAG'
     tag_name: '$CI_COMMIT_TAG'
     description: |
-      Release ${CI_COMMIT_TAG}
-      Includes following artifacts:
-      ${ARTIFACT_FILES}
+      Release $CI_COMMIT_TAG created automatically.
+      Includes bundled library package.
     assets:
       links:
-        - name: 'Release artifacts'
-          url: '${CI_JOB_URL}/artifacts/download'
-        - name: 'Direct artifact links'
-          url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/'
+        - name: '${ARTIFACT_NAME}'
+          url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/${ARTIFACT_NAME}'
   dependencies:
     - pack
