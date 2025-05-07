@@ -27,14 +27,8 @@ release_job:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v.*/
   script:
-    - |
-      echo "Variable GLAB_TOKEN length: ${#GLAB_TOKEN}"
-    - if [ -z "$GLAB_TOKEN" ]; then echo "GLAB_TOKEN не установлена!"; exit 1; else echo "GLAB_TOKEN установлена"; fi
-    - |
-      glab auth login --hostname gitlab.com --token "$GLAB_TOKEN" --api-protocol https
-    - |
-      glab release create "$CI_COMMIT_TAG" *.tgz \
-          --name "$CI_COMMIT_TAG"
+    - glab auth login --hostname gitlab.com --token "$GLAB_TOKEN" --api-protocol https
+    - glab release create "$CI_COMMIT_TAG" *.tgz --name "$CI_COMMIT_TAG"
   needs:
     - job: build_and_pack
       artifacts: true
