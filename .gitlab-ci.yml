@@ -51,29 +51,29 @@ release:
     - when: manual
   script:
     - |
-      # Формируем JSON с артефактами
-      LINKS_JSON=$(jq -n '[
-        {
-          "name": "Source code (zip)",
-          "url": "\(env.CI_PROJECT_URL)/-/archive/\(env.CI_COMMIT_TAG)/\(env.CI_PROJECT_NAME)-\(env.CI_COMMIT_TAG).zip"
-        },
-        {
-          "name": "Source code (tar.gz)",
-          "url": "\(env.CI_PROJECT_URL)/-/archive/\(env.CI_COMMIT_TAG)/\(env.CI_PROJECT_NAME)-\(env.CI_COMMIT_TAG).tar.gz"
-        }
-      ] + [
-        reduce inputs as $line ([]; . + [{
-          "name": $line,
-          "url": "\(env.CI_API_V4_URL)/projects/\(env.CI_PROJECT_ID)/packages/generic/\(env.CI_PROJECT_NAME)/\(env.CI_COMMIT_TAG)/\($line)"
-        }])
-      ]' < artifacts.txt)
+      # Формируем базовую часть JSON
+      LINKS_JSON='['
 
-      echo "Generated links JSON:"
-      echo "$LINKS_JSON" | jq
+      # Добавляем стандартные исходники
+      LINKS_JSON+='{"name":"Source code (zip)","url":"'$CI_PROJECT_URL'/-/archive/'$CI_COMMIT_TAG'/'$CI_PROJECT_NAME'-'$CI_COMMIT_TAG'.zip"},'
+      LINKS_JSON+='{"name":"Source code (tar.gz)","url":"'$CI_PROJECT_URL'/-/archive/'$CI_COMMIT_TAG'/'$CI_PROJECT_NAME'-'$CI_COMMIT_TAG'.tar.gz"},'
+
+      # Добавляем кастомные артефакты
+      while read -r file; do
+        LINKS_JSON+='{"name":"'$file'","url":"'$CI_API_V4_URL'/projects/'$CI_PROJECT_ID'/packages/generic/'$CI_PROJECT_NAME'/'$CI_COMMIT_TAG'/'$file'"},'
+      done < artifacts.txt
+
+      # Удаляем последнюю запятую и закрываем массив
+      LINKS_JSON="${LINKS_JSON%,}]"
+
+      # Создаем временный файл для JSON
+      echo "$LINKS_JSON" > links.json
+      echo "Generated JSON:"
+      cat links.json
 
       # Создаем релиз
       release-cli create \
         --name "Release $CI_COMMIT_TAG" \
         --tag-name "$CI_COMMIT_TAG" \
-        --description "Version $CI_COMMIT_TAG of $CI_PROJECT_NAME. Includes pre-built packages." \
-        --assets-json "$LINKS_JSON"
+        --description "Version $CI_COMMIT_TAG of $CI_PROJECT_NAME" \
+        --assets-json "$(cat links.json)"
