@@ -13,16 +13,14 @@ pack:
   stage: build
   image: node:lts
   rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^v/
-      when: on_success
+    - if: $CI_COMMIT_TAG =~ /^v/
     - when: manual
       allow_failure: false
-  before_script:
-    - npm ci
   script:
+    - npm ci
     - npm pack
-    - export ARTIFACT_NAME=$(ls *.tgz)
-    - echo "ARTIFACT_NAME=${ARTIFACT_NAME}" > artifact.env
+    - export ARTIFACT_FILES=$(find . -maxdepth 1 -type f \( -name "*.tgz" -o -name "*.zip" -o -name "*.stx" \) -printf "%f\n" | tr '\n' ' ')
+    - echo "ARTIFACT_FILES=${ARTIFACT_FILES}" > artifact.env
   artifacts:
     paths:
       - '*.tgz'
@@ -30,26 +28,25 @@ pack:
       - '*.stx'
     reports:
       dotenv: artifact.env
+    access: all
 
 release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   needs: ['pack']
   rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^v/
-    - when: manual
-      exists: [tags]
+    - if: $CI_COMMIT_TAG =~ /^v/
   script:
-    - echo "Creating release for $CI_COMMIT_TAG"
+    - echo "Preparing release for $CI_COMMIT_TAG"
   release:
     name: '$CI_COMMIT_TAG'
     tag_name: '$CI_COMMIT_TAG'
     description: |
-      Release $CI_COMMIT_TAG created automatically.
-      Includes bundled library package.
+      Release ${CI_COMMIT_TAG}
+      Artifacts: ${ARTIFACT_FILES}
     assets:
       links:
-        - name: '${ARTIFACT_NAME}'
-          url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/${ARTIFACT_NAME}'
+        - name: 'Package'
+          url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/$ARTIFACT_NAME'
   dependencies:
     - pack
