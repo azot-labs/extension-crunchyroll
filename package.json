@@ -1,5 +1,5 @@
 {
-  "name": "@streamyx/extension-crunchyroll",
+  "name": "crunchyroll",
   "version": "0.1.10",
   "author": "Vitaly Gashkov <vitalygashkov@vk.com>",
   "homepage": "https://www.crunchyroll.com",
