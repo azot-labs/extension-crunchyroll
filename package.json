@@ -1,26 +1,39 @@
 {
   "name": "crunchyroll",
   "version": "0.1.10",
-  "author": "Vitaly Gashkov <vitalygashkov@vk.com>",
   "homepage": "https://www.crunchyroll.com",
   "config": {
-    "name": "Crunchyroll",
+    "title": "Crunchyroll",
     "tag": "CR",
-    "iconUrl": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/d6/8e/2c/d68e2cd5-885f-1e93-026f-fdefcd8bf6f0/AppIcon-0-0-1x_U007emarketing-0-10-0-85-220.png/460x0w.webp"
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/d6/8e/2c/d68e2cd5-885f-1e93-026f-fdefcd8bf6f0/AppIcon-0-0-1x_U007emarketing-0-10-0-85-220.png/460x0w.webp"
   },
+  "keywords": [
+    "Streaming Services"
+  ],
+  "author": {
+    "name": "Streamyx",
+    "url": "https://streamyx.tv/"
+  },
+  "contributors": [
+    {
+      "name": "Vitaly Gashkov",
+      "email": "vitalygashkov@vk.com",
+      "url": "https://github.com/vitalygashkov"
+    }
+  ],
   "license": "MIT",
   "main": "dist/crunchyroll.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "stx dev",
     "build": "stx build",
     "prepack": "npm run build",
     "test": "vitest"
   },
-  "files": [
-    "dist"
-  ],
   "devDependencies": {
-    "@streamyx/api": "^0.2.8",
+    "@streamyx/api": "^0.2.10",
     "@types/node": "^22.7.5",
     "tsup": "^8.3.0",
     "typescript": "^5.6.3",
