@@ -20,6 +20,7 @@ build_and_pack:
       - '*.tgz'
       - '*.zip'
       - '*.stx'
+      - 'package.json'
     expire_in: 1 week
 
 release_job:
@@ -30,7 +31,7 @@ release_job:
     - |
       set -e
       assets_list=""
-      for f in *.tgz *.zip *.stx; do
+      for f in *.tgz *.zip *.stx package.json; do
         if [ -f "$f" ]; then
           assets_list="$assets_list $f"
         fi
