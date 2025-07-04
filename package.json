@@ -1,6 +1,6 @@
 {
   "name": "crunchyroll",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "homepage": "https://www.crunchyroll.com",
   "config": {
     "title": "Crunchyroll",
