@@ -48,7 +48,7 @@ export const PLAY_PLATFORMS = {
 export const DEFAULT_PLAY_PLATFORM = PLAY_PLATFORMS.vidaa;
 
 export const CLIENTS = {
-  mobile: { id: 'nwdqehqddoxeknc445eo', secret: 'Sv0axNM9NBy4Kp8No2HzdPN-2yV9vUiZ' },
+  mobile: { id: 'ikf9gniwps74vmn6wsdl', secret: 'DKPwT7jpGFmCbtSRc4jHYvlPzkHyJiZp' },
   switch: { id: 't-kdgp2h8c3jub8fn0fq', secret: 'yfLDfMfrYvKXh4JXS1LEI2cCqu1v5Wan' },
   tv: { id: 'ju8lksokvlqmg1_fjmnv', secret: 'AMZSQvd9Dg-kI4Qc7NPqiU5O6aKoZIkh' },
   tvProto: { id: 'haz2ernyiind8rkvoeg-', secret: 'kce7P5Af9-OMoNnXcVwqZCpg1vFeaR0p' },
@@ -82,7 +82,7 @@ export const DEVICES = {
     id: crypto.randomUUID(),
     platform: 'android',
     name: 'phone',
-    type: 'Samsung SM-S900C',
+    type: 'Samsung SM-G980F',
     userAgent: 'Crunchyroll/3.60.0 Android/9 okhttp/4.12.0',
     clientId: CLIENTS.mobile.id,
     clientSecret: CLIENTS.mobile.secret,
