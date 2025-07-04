@@ -21,7 +21,10 @@ const buildDrmRequestOptions = (assetId: string, accountId: string) => ({
   }),
 });
 
-const init = () => signIn();
+const init = async () => {
+  await updateAuthorizationHeader();
+  await signIn();
+};
 
 const getDrmConfig = async (assetId: string): Promise<DrmConfig> => {
   const options = buildDrmRequestOptions(assetId, localStorage.getItem('accountId') || '');
@@ -206,7 +209,6 @@ export default defineExtension({
   init,
 
   fetchContentMetadata: async (url, args) => {
-    await updateAuthorizationHeader();
     const episodeId = url.split('watch/')[1]?.split('/')[0];
     const seriesId = url.split('series/')[1]?.split('/')[0];
     const results: ContentMetadata[] = [];

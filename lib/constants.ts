@@ -71,18 +71,16 @@ const createDevice = <T = Record<string, string>>(
 export const DEVICES = {
   nintendoSwitch: createDevice({
     id: crypto.randomUUID(),
-    platform: 'console',
     name: 'switch',
     type: 'Nintendo Switch',
     userAgent: 'Crunchyroll/1.8.0 Nintendo Switch/12.3.12.0 UE4/4.27',
     clientId: CLIENTS.switch.id,
     clientSecret: CLIENTS.switch.secret,
   }),
-  androidPhone: createDevice({
+  phone: createDevice({
     id: crypto.randomUUID(),
-    platform: 'android',
-    name: 'phone',
-    type: 'Samsung SM-G980F',
+    name: 'iPhone',
+    type: 'iPhone 13',
     userAgent: 'Crunchyroll/3.60.0 Android/9 okhttp/4.12.0',
     clientId: CLIENTS.mobile.id,
     clientSecret: CLIENTS.mobile.secret,
@@ -93,4 +91,4 @@ export const DEVICES = {
 export const USER_AGENT =
   'Crunchyroll/4.77.2 (bundle_identifier:com.crunchyroll.iphone; build_number:4139672.438176041) iOS/18.3.2 Gravity/4.77.2';
 
-export const DEVICE = DEVICES.androidPhone;
+export const DEVICE = DEVICES.phone;

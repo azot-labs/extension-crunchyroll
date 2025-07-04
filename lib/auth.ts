@@ -61,11 +61,13 @@ const checkToken = () => {
 
 const fetchToken = async (params: Record<string, string>) => {
   try {
+    const deviceName = localStorage.getItem('deviceName') || DEVICE.name;
     const deviceId = localStorage.getItem('deviceId') || DEVICE.id;
     const deviceType = localStorage.getItem('deviceType') || DEVICE.type;
     const options = buildRequestOptions({
       ...params,
       scope: 'offline_access',
+      device_name: deviceName,
       device_id: deviceId,
       device_type: deviceType,
     });
@@ -88,6 +90,7 @@ const fetchToken = async (params: Record<string, string>) => {
       localStorage.setItem('accountId', auth.account_id);
       localStorage.setItem('cookies', http.headers.cookie);
       localStorage.setItem('cmsAuth', JSON.stringify(cmsAuth));
+      localStorage.setItem('deviceName', deviceName);
       localStorage.setItem('deviceId', deviceId);
       localStorage.setItem('deviceType', deviceType);
       http.setHeader('authorization', `Bearer ${auth.accessToken}`);
@@ -110,6 +113,7 @@ export const signIn = async (username?: string, password?: string) => {
   http.setHeader('authorization', `Bearer ${localStorage.getItem('accessToken')}`);
   const { hasToken, isTokenExpired } = checkToken();
   if (!hasToken) {
+    localStorage.removeItem('deviceName');
     localStorage.removeItem('deviceId');
     localStorage.removeItem('deviceType');
     console.debug(`Requesting credentials`);
