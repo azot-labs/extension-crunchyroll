@@ -44,7 +44,7 @@ jobs:
           fi
 
           gh release create ${{ github.ref_name }} \
-            --title "Release v${{ steps.package_version.outputs.version }}" \
+            --title "v${{ steps.package_version.outputs.version }}" \
             --generate-notes \
             $PRERELEASE_FLAG \
             "${{ steps.pack_artifact.outputs.artifact_path }}" \
