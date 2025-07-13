@@ -29,7 +29,7 @@ jobs:
       - name: Build and Pack
         id: pack_artifact
         run: |
-          ARTIFACT_FILE=$(npm pack)
+          ARTIFACT_FILE=$(ls -1 *.tgz | head -n 1)
           echo "artifact_path=$ARTIFACT_FILE" >> "$GITHUB_OUTPUT"
           echo "Created artifact: $ARTIFACT_FILE"
 
