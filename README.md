@@ -1,3 +1,3 @@
-# @streamyx/extension-crunchyroll
+# Crunchyroll
 
-This extension is built-in and can be used without installation.
+Crunchyroll support for Azot
