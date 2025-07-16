@@ -31,9 +31,11 @@ const buildRequestOptions = (params: Record<string, string>) => {
 };
 
 const promptCredentials = async () => {
-  const { username, password } = await question.ask({
-    username: { label: 'Username' },
-    password: { label: 'Password' },
+  const { username, password } = await Azot.prompt({
+    fields: {
+      username: { label: 'Username' },
+      password: { label: 'Password' },
+    },
   });
   return { username, password };
 };
@@ -71,6 +73,8 @@ const fetchToken = async (params: Record<string, string>) => {
       device_id: deviceId,
       device_type: deviceType,
     });
+    const accessToken = localStorage.getItem('accessToken');
+    if (accessToken) options.headers.authorization = `Bearer ${accessToken}`;
     const response = await fetch(ROUTES.token, options);
     const auth: any = await response.json();
     const error = auth.error || response.status !== 200;
@@ -88,12 +92,10 @@ const fetchToken = async (params: Record<string, string>) => {
       localStorage.setItem('scope', auth.scope);
       localStorage.setItem('country', auth.country);
       localStorage.setItem('accountId', auth.account_id);
-      localStorage.setItem('cookies', http.headers.cookie);
       localStorage.setItem('cmsAuth', JSON.stringify(cmsAuth));
       localStorage.setItem('deviceName', deviceName);
       localStorage.setItem('deviceId', deviceId);
       localStorage.setItem('deviceType', deviceType);
-      http.setHeader('authorization', `Bearer ${auth.accessToken}`);
     }
   } catch (e: any) {
     console.debug(`Auth failed: ${e.message}`);
@@ -110,7 +112,6 @@ const fetchRefreshToken = (refreshToken: string) => {
 };
 
 export const signIn = async (username?: string, password?: string) => {
-  http.setHeader('authorization', `Bearer ${localStorage.getItem('accessToken')}`);
   const { hasToken, isTokenExpired } = checkToken();
   if (!hasToken) {
     localStorage.removeItem('deviceName');
@@ -128,7 +129,6 @@ export const signIn = async (username?: string, password?: string) => {
 };
 
 export const signOut = async () => {
-  http.setHeader('authorization', '');
   localStorage.clear();
 };
 
