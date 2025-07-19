@@ -99,7 +99,6 @@ const fetchToken = async (params: Record<string, string>) => {
     }
   } catch (e: any) {
     console.debug(`Auth failed: ${e.message}`);
-    process.exit(1);
   }
 };
 

@@ -8,6 +8,7 @@ import {
   fetchPlayback,
   fetchPlayData,
   fetchSeriesSeasons,
+  getCms,
   revokePlayData,
 } from './lib/api';
 
@@ -207,6 +208,11 @@ export default defineExtension({
   init,
 
   fetchContentMetadata: async (url, args) => {
+    const cms = getCms();
+    if (!cms.bucket) {
+      console.error('CMS bucket not found');
+      return [];
+    }
     const episodeId = url.split('watch/')[1]?.split('/')[0];
     const seriesId = url.split('series/')[1]?.split('/')[0];
     const results: ContentMetadata[] = [];

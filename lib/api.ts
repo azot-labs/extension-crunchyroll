@@ -26,7 +26,7 @@ const request = async (url: string, method: string = 'GET') => {
   }
 };
 
-const getCms = () => {
+export const getCms = () => {
   const cmsAuth = localStorage.getItem('cmsAuth');
   if (!cmsAuth) return {} as Cms;
   return JSON.parse(cmsAuth).cms as Cms;
