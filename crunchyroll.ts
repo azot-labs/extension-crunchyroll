@@ -204,8 +204,6 @@ const getEpisodeIdsBySeries = async (seriesId: string, args: Options) => {
 };
 
 export default defineExtension({
-  name: 'crunchyroll',
-  tag: 'CR',
   init,
 
   fetchContentMetadata: async (url, args) => {
