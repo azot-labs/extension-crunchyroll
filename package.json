@@ -32,6 +32,9 @@
     "prepack": "npm run build",
     "test": "vitest"
   },
+  "engines": {
+    "azot": ">=4.3.10"
+  },
   "devDependencies": {
     "@types/node": "^24.0.15",
     "azot": "^0.9.0-alpha.1",
