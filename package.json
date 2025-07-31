@@ -8,7 +8,7 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/d6/8e/2c/d68e2cd5-885f-1e93-026f-fdefcd8bf6f0/AppIcon-0-0-1x_U007emarketing-0-10-0-85-220.png/460x0w.webp"
   },
   "keywords": [
-    "Streaming Services"
+    "streaming-services"
   ],
   "author": {
     "name": "Azot",
@@ -29,7 +29,6 @@
   "scripts": {
     "dev": "azt dev",
     "build": "azt build",
-    "prepack": "npm run build",
     "test": "vitest"
   },
   "engines": {
