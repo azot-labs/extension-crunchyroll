@@ -5,9 +5,8 @@ const request = async (url: string, method: string = 'GET') => {
   console.debug(`Getting data from ${url}...`);
   const response = await fetch(url, {
     method,
-    integrity: 'fetch',
     headers: {
-      authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+      Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
       'User-Agent': USER_AGENT,
     },
   });

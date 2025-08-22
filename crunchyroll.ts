@@ -1,7 +1,7 @@
 import type { ContentMetadata, ContentSource, DrmConfig, Options } from 'azot';
 import { defineExtension } from 'azot';
 import { ROUTES, USER_AGENT } from './lib/constants';
-import { signIn, updateAuthorizationHeader } from './lib/auth';
+import { signIn } from './lib/auth';
 import {
   fetchEpisodes,
   fetchObject,
@@ -23,7 +23,6 @@ const buildDrmRequestOptions = (assetId: string, accountId: string) => ({
 });
 
 const init = async () => {
-  await updateAuthorizationHeader();
   await signIn();
 };
 

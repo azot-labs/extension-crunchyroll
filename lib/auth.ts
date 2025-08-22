@@ -1,11 +1,7 @@
 import type { CmsAuthResponse } from './types';
-import { createBasicToken, DEVICE, ROUTES, USER_AGENT } from './constants';
+import { AUTH_HEADERS, createBasicToken, DEVICE, ROUTES } from './constants';
 
-export const HEADERS = {
-  authorization: DEVICE.authorization,
-  'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-  'User-Agent': USER_AGENT,
-};
+const HEADERS = { ...AUTH_HEADERS };
 
 const fetchProductionSecret = async () => {
   const text = await fetch(ROUTES.bundle).then((res) => res.text());
@@ -23,7 +19,7 @@ export const updateAuthorizationHeader = async () => {
   if (!result) return;
   const { id, secret } = result;
   const basicToken = createBasicToken(id, secret);
-  HEADERS.authorization = `Basic ${basicToken}`;
+  HEADERS.Authorization = `Basic ${basicToken}`;
 };
 
 const buildRequestOptions = (params: Record<string, string>) => {
@@ -74,7 +70,7 @@ const fetchToken = async (params: Record<string, string>) => {
       device_type: deviceType,
     });
     const accessToken = localStorage.getItem('accessToken');
-    if (accessToken) options.headers.authorization = `Bearer ${accessToken}`;
+    if (accessToken) options.headers.Authorization = `Bearer ${accessToken}`;
     const response = await fetch(ROUTES.token, options);
     const auth: any = await response.json();
     const error = auth.error || response.status !== 200;
@@ -130,9 +126,3 @@ export const signIn = async (username?: string, password?: string) => {
 export const signOut = async () => {
   localStorage.clear();
 };
-
-export const createAuth = () => {
-  return {};
-};
-
-export type Auth = ReturnType<typeof createAuth>;
