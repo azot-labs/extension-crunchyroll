@@ -1,5 +1,5 @@
 import type { CmsAuthResponse } from './types';
-import { AUTH_HEADERS, createBasicToken, DEVICE, ROUTES } from './constants';
+import { AUTH_HEADERS, DEVICE, ROUTES } from './constants';
 
 const HEADERS = { ...AUTH_HEADERS };
 
@@ -14,12 +14,18 @@ const fetchProductionSecret = async () => {
   return { id, secret };
 };
 
+const fetchAppCredentials = async () => {
+  const url = 'https://raw.githubusercontent.com/vitalygashkov/crextractor/refs/heads/main/credentials.tv.json';
+  const credentials = await fetch(url)
+    .then((response) => response.json())
+    .catch(() => null);
+  return credentials;
+};
+
 export const updateAuthorizationHeader = async () => {
-  const result = await fetchProductionSecret();
-  if (!result) return;
-  const { id, secret } = result;
-  const basicToken = createBasicToken(id, secret);
-  HEADERS.Authorization = `Basic ${basicToken}`;
+  const credentials = await fetchAppCredentials();
+  if (!credentials?.authorization) return;
+  HEADERS.Authorization = credentials.authorization;
 };
 
 const buildRequestOptions = (params: Record<string, string>) => {
@@ -69,8 +75,6 @@ const fetchToken = async (params: Record<string, string>) => {
       device_id: deviceId,
       device_type: deviceType,
     });
-    const accessToken = localStorage.getItem('accessToken');
-    if (accessToken) options.headers.Authorization = `Bearer ${accessToken}`;
     const response = await fetch(ROUTES.token, options);
     const auth: any = await response.json();
     const error = auth.error || response.status !== 200;
