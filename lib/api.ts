@@ -1,5 +1,5 @@
 import type { Cms } from './types';
-import { DEFAULT_PLAY_PLATFORM, ROUTES, USER_AGENT } from './constants';
+import { PLAY_PLATFORMS, ROUTES, USER_AGENT } from './constants';
 
 const request = async (url: string, method: string = 'GET') => {
   console.debug(`Getting data from ${url}...`);
@@ -42,16 +42,28 @@ const sign = (params: Record<string, string> = {}) => new URLSearchParams({ ...p
 const DEFAULT_DUB = 'ja-JP';
 const preferDub = (language: string = DEFAULT_DUB) => ({ preferred_audio_language: language });
 
+export const fetchMe = async () => {
+  return request(ROUTES.me);
+};
+
 export const fetchProfile = async () => {
   return request(ROUTES.profile);
 };
 
-export const fetchPlayback = async (id: string | number) => {
-  return request(`${ROUTES.playback}/${id}/${DEFAULT_PLAY_PLATFORM}/play`);
+export const fetchSubscriptionBenefits = async (subscriptionId: string) => {
+  return request(ROUTES.subscriptionBenefits.replace('{subscriptionId}', subscriptionId));
 };
 
-export const fetchPlayData = async (id: string | number) => {
-  return request(`${ROUTES.play}/${id}/${DEFAULT_PLAY_PLATFORM}/play`);
+export const fetchPlayback = async (
+  id: string | number,
+  platform: string = PLAY_PLATFORMS.androidtv,
+  purpose: 'play' | 'download' = 'play'
+) => {
+  return request(`${ROUTES.playback}/${id}/${platform}/${purpose}`);
+};
+
+export const fetchPlayData = async (id: string | number, platform: string = PLAY_PLATFORMS.androidtv) => {
+  return request(`${ROUTES.play}/${id}/${platform}/play`);
 };
 
 export const revokePlayData = async (id: string | number, token: string) => {

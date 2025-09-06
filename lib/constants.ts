@@ -1,9 +1,9 @@
 export const createBasicToken = (clientId: string, clientSecret: string) =>
   Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
-export const CLIENT = { id: 'bmbrkxyx3d7u6jsfyla4', secret: 'AIN4D5VE_cp0wVzfNoP0YqHUrYFp9hSg' };
+export const CLIENT = { id: 'pug0n7ymuaolkkgi3lbj', secret: 'XikisaCaXFYBcXqoOlkST1h6oZXlwDJN' };
 
-export const USER_AGENT = 'Crunchyroll/ANDROIDTV/3.42.1_22267 (Android 16; en-US; sdk_gphone64_x86_64)';
+export const USER_AGENT = 'Crunchyroll/ANDROIDTV/3.45.0_22272 (Android 16; en-US; sdk_gphone64_x86_64)';
 
 export const AUTH_HEADERS = {
   Authorization: `Basic ${createBasicToken(CLIENT.id, CLIENT.secret)}`,
@@ -32,13 +32,12 @@ export const PLAY_PLATFORMS = {
   lgtv: 'tv/lg',
   rokutv: 'tv/roku',
   android: 'android/phone',
-  androidt: 'android/tablet',
+  androidtablet: 'android/tablet',
+  androidtv: 'tv/android_tv',
   iphone: 'ios/iphone',
   ipad: 'ios/ipad',
   vision: 'ios/vision',
 };
-
-export const DEFAULT_PLAY_PLATFORM = PLAY_PLATFORMS.androidt;
 
 export const DOMAINS = {
   www: 'https://www.crunchyroll.com',
@@ -57,8 +56,10 @@ export const ROUTES = {
   cms: `${DOMAINS.betaApi}/cms/v2`,
   index: `${DOMAINS.betaApi}/index/v2`,
   contentCms: `${DOMAINS.betaApi}/content/v2/cms`,
+  me: `${DOMAINS.www}/accounts/v1/me`,
   profile: `${DOMAINS.betaApi}/accounts/v1/me/profile`,
-  playback: `${DOMAINS.www}/playback/v2`,
+  subscriptionBenefits: `${DOMAINS.www}/subs/v1/subscriptions/{subscriptionId}/benefits`,
+  playback: `${DOMAINS.www}/playback/v3`,
   play: `${DOMAINS.play}/v3`,
   bundle: `${DOMAINS.static}/vilos-v2/web/vilos/js/bundle.js`,
   drm: `${DOMAINS.betaApi}/drm/v1/auth`, // broken - deprecated since 06.05.2025

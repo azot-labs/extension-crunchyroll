@@ -1,6 +1,6 @@
 import type { ContentMetadata, ContentSource, DrmConfig, Options } from 'azot';
 import { defineExtension } from 'azot';
-import { ROUTES, USER_AGENT } from './lib/constants';
+import { PLAY_PLATFORMS, ROUTES, USER_AGENT } from './lib/constants';
 import { signIn, updateAuthorizationHeader } from './lib/auth';
 import {
   fetchEpisodes,
@@ -86,18 +86,46 @@ const getEpisodeMetadata = async (episodeId: string, _args: Options): Promise<Co
   }
 };
 
-const getEpisodeSource = async (episodeId: string, args: Options) => {
-  const play = await fetchPlayback(episodeId);
+const convertDownloadToPlayback = (audioUrl: string, videoUrl: string): string => {
+  try {
+    const url = new URL(audioUrl);
+    const urla = new URL(videoUrl);
+    url.pathname = url.pathname.replace('/manifest/download/', '/manifest/');
+    url.searchParams.delete('downloadGuid');
+    url.searchParams.set('playbackGuid', urla.searchParams.get('playbackGuid') as string);
+    return url.toString();
+  } catch (err) {
+    return audioUrl;
+  }
+};
 
-  if (play.error === 'TOO_MANY_ACTIVE_STREAMS') {
+const getEpisodeSource = async (episodeId: string, args: Options) => {
+  let videoPlayPlatform: string = PLAY_PLATFORMS.androidtv;
+  let audioPlayPlatform: string = PLAY_PLATFORMS.android;
+
+  let isDLBypass = true;
+  if (!localStorage.getItem('scope')?.includes('offline_access')) {
+    isDLBypass = false;
+    audioPlayPlatform = PLAY_PLATFORMS.androidtv;
+    console.warn(
+      '192 kb/s audio downloads are not available on your current Crunchyroll plan. Please upgrade to the "Mega Fan" plan to enable this feature. Falling back to 128 kb/s CBR stream.'
+    );
+  }
+
+  const videoPlay = await fetchPlayback(episodeId, videoPlayPlatform, 'play');
+  const audioPlay = await fetchPlayback(episodeId, audioPlayPlatform, 'download');
+
+  videoPlay.url = convertDownloadToPlayback(audioPlay.url, videoPlay.url);
+
+  if (videoPlay.error === 'TOO_MANY_ACTIVE_STREAMS') {
     console.warn(`Too many active streams. Revoking all active streams...`);
-    for (const activeStream of play.activeStreams) {
+    for (const activeStream of videoPlay.activeStreams) {
       await revokePlayData(activeStream.contentId, activeStream.token);
     }
   }
 
   const subtitles: any[] = [];
-  for (const subtitle of Object.values(play.subtitles) as any[]) {
+  for (const subtitle of Object.values(videoPlay.subtitles) as any[]) {
     const containsSelectedSubtitles =
       !args.subtitleLanguages?.length ||
       args.subtitleLanguages?.some((lang: string) => subtitle.language.startsWith(lang));
@@ -109,10 +137,10 @@ const getEpisodeSource = async (episodeId: string, args: Options) => {
     });
   }
 
-  let data = play;
-  if (play.versions) {
-    const defaultVersion = { audio_locale: play.audioLocale, guid: episodeId };
-    const versions = [defaultVersion, ...play.versions];
+  let data = videoPlay;
+  if (videoPlay.versions) {
+    const defaultVersion = { audio_locale: videoPlay.audioLocale, guid: episodeId };
+    const versions = [defaultVersion, ...videoPlay.versions];
     const version = filterSeasonVersionsByAudio(versions, args.languages);
     if (!version) {
       console.warn(
@@ -153,7 +181,7 @@ const getEpisodeSource = async (episodeId: string, args: Options) => {
         'Cache-Control': 'no-cache',
         'content-type': 'application/octet-stream',
         'x-cr-content-id': data.guid || episodeId,
-        'x-cr-video-token': play.token,
+        'x-cr-video-token': videoPlay.token,
       },
     },
     audioType,
