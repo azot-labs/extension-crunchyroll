@@ -79,10 +79,9 @@ const fetchToken = async (params: Record<string, string>) => {
     const auth: any = await response.json();
     const error = auth.error || response.status !== 200;
     if (error) {
-      console.error(`Can't get token. Status code: ${response.status}. Message: ${auth.error}. Logging out...`);
+      console.error(`Can't get token. Status code: ${response.status}. Message: ${auth.error}.`);
       console.debug(JSON.stringify(auth));
       await signOut();
-      await signIn();
     } else {
       const cmsAuth = await fetchCmsAuth(auth.access_token);
       localStorage.setItem('accessToken', auth.access_token);
