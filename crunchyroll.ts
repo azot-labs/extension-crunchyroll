@@ -1,5 +1,5 @@
 import type { ContentMetadata, ContentSource, DrmConfig, Options } from 'azot';
-import { defineExtension } from 'azot';
+import { defineExtension, utils } from 'azot';
 import { PLAY_PLATFORMS, ROUTES, USER_AGENT } from './lib/constants';
 import { signIn, updateAuthorizationHeader } from './lib/auth';
 import {
@@ -217,7 +217,7 @@ const getEpisodeIdsBySeries = async (seriesId: string, args: Options) => {
       .catch(() => []);
   });
   const allEpisodes = (await Promise.all(episodesQueue)).flat();
-  const eps = Azot.utils.extendEpisodes(args.episodes || new Map());
+  const eps = utils.extendEpisodes(args.episodes || new Map());
   const episodes = eps.items.size
     ? allEpisodes
     : allEpisodes.filter((episode: any) => eps.has(episode.episode_number, episode.season_number));

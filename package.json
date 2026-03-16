@@ -1,6 +1,6 @@
 {
   "name": "crunchyroll",
-  "version": "0.2.6",
+  "version": "1.0.0",
   "homepage": "https://www.crunchyroll.com",
   "config": {
     "title": "Crunchyroll",
@@ -15,7 +15,7 @@
   ],
   "author": {
     "name": "Azot",
-    "url": "https://azot.so/"
+    "url": "https://azot.mov/"
   },
   "contributors": [
     {
@@ -25,7 +25,7 @@
     }
   ],
   "license": "MIT",
-  "main": "dist/crunchyroll.js",
+  "main": "dist/crunchyroll.cjs",
   "files": [
     "dist"
   ],
@@ -34,13 +34,13 @@
     "build": "azt build",
     "test": "vitest"
   },
-  "engines": {
-    "azot": ">=4.3.10"
-  },
   "devDependencies": {
-    "@types/node": "^24.7.0",
-    "azot": "^5.0.0-alpha.9",
+    "@types/node": "^25.5.0",
+    "azot": "^5.0.0-alpha.18",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "azot": ">=4.3.38"
   }
 }

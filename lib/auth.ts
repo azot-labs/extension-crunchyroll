@@ -1,4 +1,4 @@
-import { input } from 'azot';
+import { prompt } from 'azot';
 import type { CmsAuthResponse } from './types';
 import { AUTH_HEADERS, DEVICE, ROUTES } from './constants';
 
@@ -34,10 +34,11 @@ const buildRequestOptions = (params: Record<string, string>) => {
 };
 
 const promptCredentials = async () => {
-  const { username, password } = await input('Authorization', {
-    fields: {
-      username: { label: 'Username' },
-      password: { label: 'Password' },
+  const { username, password } = await prompt('Enter your credentials', {
+    title: 'Authorization',
+    form: {
+      username: { type: 'text', title: 'Username' },
+      password: { type: 'password', title: 'Password' },
     },
   });
   return { username, password };
