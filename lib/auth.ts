@@ -15,7 +15,7 @@ const fetchProductionSecret = async () => {
   return { id, secret };
 };
 
-const fetchAppCredentials = async () => {
+const fetchAppCredentials = async (): Promise<any> => {
   const url = 'https://raw.githubusercontent.com/vitalygashkov/crextractor/refs/heads/main/credentials.tv.json';
   const credentials = await fetch(url)
     .then((response) => response.json())

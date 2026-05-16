@@ -1,100 +1,54 @@
-import type { ContentMetadata, ContentSource, DrmConfig, Options } from 'azot';
-import { defineExtension, utils } from 'azot';
+import { defineExtension, utils, Input, UrlSource, type Options, type MediaEntry } from 'azot';
 import { PLAY_PLATFORMS, ROUTES, USER_AGENT } from './lib/constants';
-import { signIn, updateAuthorizationHeader } from './lib/auth';
-import {
-  fetchEpisodes,
-  fetchObject,
-  fetchPlayback,
-  fetchPlayData,
-  fetchSeriesSeasons,
-  getCms,
-  revokePlayData,
-} from './lib/api';
-
-const buildDrmRequestOptions = (assetId: string, accountId: string) => ({
-  method: 'POST',
-  body: JSON.stringify({
-    user_id: accountId,
-    session_id: Math.floor(Math.random() * 100000000000000).toString(),
-    asset_id: assetId,
-    accounting_id: 'crunchyroll',
-  }),
-});
-
-const init = async () => {
-  await updateAuthorizationHeader();
-  await signIn();
-};
-
-const getDrmConfig = async (assetId: string): Promise<DrmConfig> => {
-  const options = buildDrmRequestOptions(assetId, localStorage.getItem('accountId') || '');
-  const response = await fetch(ROUTES.drm, options);
-  const data: any = await response.json();
-  return {
-    server: `https://lic.drmtoday.com/license-proxy-widevine/cenc/`,
-    headers: {
-      'dt-custom-data': data.custom_data,
-      'x-dt-auth-token': data.token,
-    },
-  };
-};
+import { signIn, signOut, updateAuthorizationHeader } from './lib/auth';
+import { fetchEpisodes, fetchObject, fetchPlayback, fetchPlayData, fetchSeriesSeasons, getCms, revokePlayData } from './lib/api';
 
 const sanitizeString = (value: string) => {
   return value?.replace(/[&/\\#,+()$~%.'":*?<>{}]/g, '');
 };
 
 const filterSeasonVersionsByAudio = (versions: any, selectedAudioLangs: string[] = []) => {
-  const matchLang = (version: any) => selectedAudioLangs.some((lang) => version.audio_locale.startsWith(lang));
+  const matchLang = (version: any) =>
+    selectedAudioLangs.some((lang) => version.audio_locale.startsWith(lang));
   const matchOriginal = (version: any) => !!version.original;
-  const result = selectedAudioLangs.length ? versions.find(matchLang) : versions.find(matchOriginal) || versions[0];
-  return result;
+  return selectedAudioLangs.length ? versions.find(matchLang) : versions.find(matchOriginal) || versions[0];
 };
 
-const getAudioLocales = (versions: any) =>
-  versions
-    .map((v: any) => v.audio_locale)
-    .join(', ')
-    .trim();
+const getAudioLocales = (versions: any) => versions.map((v: any) => v.audio_locale).join(', ').trim();
 
-const getEpisodeMetadata = async (episodeId: string, _args: Options): Promise<ContentMetadata> => {
+const getEpisodeMetadata = async (episodeId: string) => {
   const object = await fetchObject(episodeId);
   const isError = object.__class__ === 'error';
   if (isError) {
     const response = await fetch('https://api.country.is').catch(() => null);
-    const { ip, country } = await response?.json();
+    const { ip, country } = ((await response?.json()) ?? {}) as { ip?: string; country?: string };
     console.info(`IP: ${ip}. Country: ${country}`);
     throw new Error(`Episode ${episodeId} not found. Code: ${object.code}. Type: ${object.type}. `);
   }
+
   const episode = object.items[0];
   const rawMetadata = episode.episode_metadata;
-
   const isMovie = !rawMetadata.episode_number;
-  if (isMovie) {
-    return {
-      id: episode.id,
-      title: sanitizeString(rawMetadata.series_title),
-    };
-  } else {
-    return {
-      id: episode.id,
-      title: sanitizeString(rawMetadata.series_title),
-      seasonNumber: rawMetadata.season_number,
-      episodeNumber: rawMetadata.episode_number,
-      episodeTitle: sanitizeString(episode.title),
-    };
-  }
+
+  return {
+    type: isMovie ? ('movie' as const) : ('episode' as const),
+    id: episode.id,
+    title: sanitizeString(rawMetadata.series_title),
+    season: isMovie ? undefined : rawMetadata.season_number,
+    episode: isMovie ? undefined : rawMetadata.episode_number,
+    episodeTitle: isMovie ? undefined : sanitizeString(episode.title),
+  };
 };
 
 const convertDownloadToPlayback = (audioUrl: string, videoUrl: string): string => {
   try {
     const url = new URL(audioUrl);
-    const urla = new URL(videoUrl);
+    const playbackUrl = new URL(videoUrl);
     url.pathname = url.pathname.replace('/manifest/download/', '/manifest/');
     url.searchParams.delete('downloadGuid');
-    url.searchParams.set('playbackGuid', urla.searchParams.get('playbackGuid') as string);
+    url.searchParams.set('playbackGuid', playbackUrl.searchParams.get('playbackGuid') as string);
     return url.toString();
-  } catch (err) {
+  } catch {
     return audioUrl;
   }
 };
@@ -103,32 +57,29 @@ const getEpisodeSource = async (episodeId: string, args: Options) => {
   let videoPlayPlatform: string = PLAY_PLATFORMS.androidtv;
   let audioPlayPlatform: string = PLAY_PLATFORMS.android;
 
-  let isDLBypass = true;
   if (!localStorage.getItem('scope')?.includes('offline_access')) {
-    isDLBypass = false;
     audioPlayPlatform = PLAY_PLATFORMS.androidtv;
     console.warn(
-      '192 kb/s audio downloads are not available on your current Crunchyroll plan. Please upgrade to the "Mega Fan" plan to enable this feature. Falling back to 128 kb/s CBR stream.'
+      '192 kb/s audio downloads are not available on your current Crunchyroll plan. Please upgrade to the "Mega Fan" plan to enable this feature. Falling back to 128 kb/s CBR stream.',
     );
   }
 
   const videoPlay = await fetchPlayback(episodeId, videoPlayPlatform, 'play');
   const audioPlay = await fetchPlayback(episodeId, audioPlayPlatform, 'download');
-
   videoPlay.url = convertDownloadToPlayback(audioPlay.url, videoPlay.url);
 
   if (videoPlay.error === 'TOO_MANY_ACTIVE_STREAMS') {
-    console.warn(`Too many active streams. Revoking all active streams...`);
+    console.warn('Too many active streams. Revoking all active streams...');
     for (const activeStream of videoPlay.activeStreams) {
       await revokePlayData(activeStream.contentId, activeStream.token);
     }
   }
 
-  const subtitles: any[] = [];
+  const subtitles: { url: string; language?: string; format?: string }[] = [];
   for (const subtitle of Object.values(videoPlay.subtitles) as any[]) {
     const containsSelectedSubtitles =
       !args.subtitleLanguages?.length ||
-      args.subtitleLanguages?.some((lang: string) => subtitle.language.startsWith(lang));
+      args.subtitleLanguages.some((lang: string) => subtitle.language.startsWith(lang));
     if (!containsSelectedSubtitles) continue;
     subtitles.push({
       url: subtitle.url,
@@ -144,7 +95,7 @@ const getEpisodeSource = async (episodeId: string, args: Options) => {
     const version = filterSeasonVersionsByAudio(versions, args.languages);
     if (!version) {
       console.warn(
-        `No suitable version found for episode #${episodeId}. Available audio: ${getAudioLocales(versions)}`
+        `No suitable version found for episode #${episodeId}. Available audio: ${getAudioLocales(versions)}`,
       );
     } else if (version.guid !== episodeId) {
       data = await fetchPlayData(version.guid);
@@ -152,27 +103,24 @@ const getEpisodeSource = async (episodeId: string, args: Options) => {
   }
 
   if (args.hardsub) {
-    let url: string = '';
+    let hardsubUrl = '';
     for (const hardsub of Object.values(data.hardSubs) as any[]) {
       const matchHardsubLang =
-        !args.subtitleLanguages?.length || args.subtitleLanguages?.some((lang: string) => hardsub.hlang.includes(lang));
-      if (matchHardsubLang) url = hardsub.url;
+        !args.subtitleLanguages?.length ||
+        args.subtitleLanguages.some((lang: string) => hardsub.hlang.includes(lang));
+      if (matchHardsubLang) hardsubUrl = hardsub.url;
     }
-    if (!url) console.warn(`No suitable hardsub stream found`);
-    else data.url = url;
+    if (!hardsubUrl) console.warn('No suitable hardsub stream found');
+    else data.url = hardsubUrl;
   }
 
-  const url = data.url;
-  const audioType = data.audioLocale?.slice(0, 2).toLowerCase();
-  const assetId = url.split('assets/p/')[1]?.split('_,')[0] || data.assetId;
-
-  const mediaInfo: ContentSource = {
-    url,
+  return {
+    url: data.url,
     headers: {
       Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
       'User-Agent': USER_AGENT,
     },
-    drm: {
+    drmConfig: {
       server: ROUTES.widevine,
       headers: {
         Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -184,90 +132,155 @@ const getEpisodeSource = async (episodeId: string, args: Options) => {
         'x-cr-video-token': videoPlay.token,
       },
     },
-    audioType,
-    audioLanguage: data.audioLocale,
     subtitles,
-
-    // TODO: Try to revoke using some timeout
-    // onDownloadFinished: () => api.revokePlayData(episodeId, data.token),
   };
-
-  return mediaInfo;
 };
 
 const getEpisodeIdsBySeries = async (seriesId: string, args: Options) => {
   const response = await fetchSeriesSeasons(seriesId);
   const seasons = response.data;
   if (!seasons?.length) {
-    console.error(`No seasons found`);
+    console.error('No seasons found');
     return [];
   }
 
   const episodesQueue = seasons.map((season: any) => {
     const version = filterSeasonVersionsByAudio(season.versions);
     if (!version) return [];
-    const overrideSeasonNumber = (episodes: any[]) => {
-      return episodes.map((episode: any) => ({
+    const overrideSeasonNumber = (episodes: any[]) =>
+      episodes.map((episode: any) => ({
         ...episode,
         season_number: season.season_number,
       }));
-    };
     return fetchEpisodes(version.guid)
       .then((data) => overrideSeasonNumber(data.items))
       .catch(() => []);
   });
+
   const allEpisodes = (await Promise.all(episodesQueue)).flat();
   const eps = utils.extendEpisodes(args.episodes || new Map());
   const episodes = eps.items.size
-    ? allEpisodes
-    : allEpisodes.filter((episode: any) => eps.has(episode.episode_number, episode.season_number));
-  if (!episodes?.length) {
+    ? allEpisodes.filter((episode: any) => eps.has(episode.episode_number, episode.season_number))
+    : allEpisodes;
+
+  if (!episodes.length) {
     const availableSeasons = seasons
       .map((s: any) => `S${s.season_number.toString().padStart(2, '0')} (${getAudioLocales(s.versions)})`)
       .join(', ');
     console.error(`No suitable episodes found. Available seasons: ${availableSeasons}`);
     return [];
   }
-  const episodeIds = episodes.map((episode: any) => episode.id);
-  return episodeIds;
+
+  return episodes.map((episode: any) => episode.id);
 };
 
 export default defineExtension({
-  init,
+  async setup() {
+    await updateAuthorizationHeader();
+    await signIn();
+  },
 
-  fetchContentMetadata: async (url, args) => {
+  async resolveEntries(url, options) {
     const cms = getCms();
     if (!cms.bucket) {
       console.error('CMS bucket not found');
       return [];
     }
+
     const episodeId = url.split('watch/')[1]?.split('/')[0];
     const seriesId = url.split('series/')[1]?.split('/')[0];
-    const results: ContentMetadata[] = [];
-    const langs = structuredClone(args.languages || []);
-    if (!langs.length) langs.push('ja-JP');
-    for (const lang of langs) {
-      args.languages = [lang];
+    const results: MediaEntry[] = [];
+    const languages = structuredClone(options.languages || []);
+    if (!languages.length) languages.push('ja-JP');
+
+    for (const language of languages) {
       if (episodeId) {
-        const episodeMetadata = await getEpisodeMetadata(episodeId, args);
-        results.push(episodeMetadata);
+        const entry = await getEpisodeMetadata(episodeId);
+        results.push({
+          ...entry,
+          details: { contentId: episodeId, language },
+        });
       } else if (seriesId) {
-        const episodeIds = await getEpisodeIdsBySeries(seriesId, args);
-        for (const episodeId of episodeIds) {
-          const episodeMetadata = await getEpisodeMetadata(episodeId, args);
-          results.push(episodeMetadata);
+        const episodeIds = await getEpisodeIdsBySeries(seriesId, { ...options, languages: [language] });
+        for (const currentEpisodeId of episodeIds) {
+          const entry = await getEpisodeMetadata(currentEpisodeId);
+          results.push({
+            ...entry,
+            details: { contentId: currentEpisodeId, language },
+          });
         }
       }
     }
+
     return results;
   },
 
-  fetchContentSource: async (contentId, args) => {
-    const episodeSource = await getEpisodeSource(contentId, args);
-    return episodeSource;
+  async resolveMedia(_url, options, entry) {
+    const contentId = entry.details?.contentId;
+    if (typeof contentId !== 'string') {
+      console.error('Crunchyroll content ID is missing');
+      return null;
+    }
+
+    const language = entry.details?.language;
+    const source = await getEpisodeSource(contentId, {
+      ...options,
+      languages: typeof language === 'string' ? [language] : options.languages,
+    });
+
+    entry.details = {
+      ...entry.details,
+      drmConfig: source.drmConfig,
+    };
+
+    const input = new Input({
+      source: new UrlSource(source.url, {
+        requestInit: source.headers ? { headers: source.headers } : undefined,
+      }),
+    });
+
+    for (const subtitle of source.subtitles ?? []) {
+      if (!subtitle.url) continue;
+      input.addSubtitleTrack(new UrlSource(subtitle.url), {
+        languageCode: subtitle.language,
+        codec: subtitle.format?.toLowerCase() as any,
+      });
+    }
+
+    return input;
   },
 
-  fetchContentDrm: async ({ assetId }) => {
-    return getDrmConfig(assetId);
+  auth: {
+    async getState() {
+      return { authenticated: !!localStorage.getItem('accessToken') };
+    },
+    async login(credentials) {
+      await updateAuthorizationHeader();
+      await signIn(credentials.username, credentials.password);
+    },
+    async logout() {
+      await signOut();
+    },
+  },
+
+  drm: {
+    async getLicense(request) {
+      if (request.system !== 'widevine') {
+        throw new Error(`Unsupported DRM system: ${request.system}`);
+      }
+
+      const drmConfig = request.entry.details?.drmConfig;
+      const url = drmConfig?.server;
+      if (!url) {
+        throw new Error('Crunchyroll DRM config is missing on the resolved entry');
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: drmConfig.headers,
+        body: request.data as any,
+      });
+      return new Uint8Array(await response.arrayBuffer());
+    },
   },
 });

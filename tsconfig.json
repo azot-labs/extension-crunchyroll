@@ -4,11 +4,14 @@
     "rootDir": "./",
     "outDir": "dist",
     "declaration": true,
+    "lib": ["ESNext"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "sourceMap": true,
     "strict": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "types": ["node"],
+    "skipLibCheck": true
   },
   "include": ["./crunchyroll.ts", "lib/**/*"],
   "exclude": ["node_modules"]
