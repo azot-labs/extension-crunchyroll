@@ -1,26 +1,49 @@
-import { defineExtension, utils, Input, UrlSource, type Options, type MediaEntry } from 'azot';
-import { PLAY_PLATFORMS, ROUTES, USER_AGENT } from './lib/constants';
-import { signIn, signOut, updateAuthorizationHeader } from './lib/auth';
-import { fetchEpisodes, fetchObject, fetchPlayback, fetchPlayData, fetchSeriesSeasons, getCms, revokePlayData } from './lib/api';
+import { defineExtension, utils, Input, UrlSource, type Options, type MediaEntry } from "azot";
+import { PLAY_PLATFORMS, ROUTES, USER_AGENT } from "./lib/constants";
+import { signIn, signOut, updateAuthorizationHeader } from "./lib/auth";
+import {
+  fetchEpisodes,
+  fetchObject,
+  fetchPlayback,
+  fetchPlayData,
+  fetchSeriesSeasons,
+  getCms,
+  revokePlayData,
+} from "./lib/api";
+
+type SharedContext = {
+  contentId?: string;
+  language?: string;
+  drmConfig?: {
+    server?: string;
+    headers?: Record<string, string>;
+  };
+};
 
 const sanitizeString = (value: string) => {
-  return value?.replace(/[&/\\#,+()$~%.'":*?<>{}]/g, '');
+  return value?.replace(/[&/\\#,+()$~%.'":*?<>{}]/g, "");
 };
 
 const filterSeasonVersionsByAudio = (versions: any, selectedAudioLangs: string[] = []) => {
   const matchLang = (version: any) =>
     selectedAudioLangs.some((lang) => version.audio_locale.startsWith(lang));
   const matchOriginal = (version: any) => !!version.original;
-  return selectedAudioLangs.length ? versions.find(matchLang) : versions.find(matchOriginal) || versions[0];
+  return selectedAudioLangs.length
+    ? versions.find(matchLang)
+    : versions.find(matchOriginal) || versions[0];
 };
 
-const getAudioLocales = (versions: any) => versions.map((v: any) => v.audio_locale).join(', ').trim();
+const getAudioLocales = (versions: any) =>
+  versions
+    .map((v: any) => v.audio_locale)
+    .join(", ")
+    .trim();
 
 const getEpisodeMetadata = async (episodeId: string) => {
   const object = await fetchObject(episodeId);
-  const isError = object.__class__ === 'error';
+  const isError = object.__class__ === "error";
   if (isError) {
-    const response = await fetch('https://api.country.is').catch(() => null);
+    const response = await fetch("https://api.country.is").catch(() => null);
     const { ip, country } = ((await response?.json()) ?? {}) as { ip?: string; country?: string };
     console.info(`IP: ${ip}. Country: ${country}`);
     throw new Error(`Episode ${episodeId} not found. Code: ${object.code}. Type: ${object.type}. `);
@@ -31,11 +54,11 @@ const getEpisodeMetadata = async (episodeId: string) => {
   const isMovie = !rawMetadata.episode_number;
 
   return {
-    type: isMovie ? ('movie' as const) : ('episode' as const),
+    type: isMovie ? ("movie" as const) : ("episode" as const),
     id: episode.id,
     title: sanitizeString(rawMetadata.series_title),
-    season: isMovie ? undefined : rawMetadata.season_number,
-    episode: isMovie ? undefined : rawMetadata.episode_number,
+    seasonNumber: isMovie ? undefined : rawMetadata.season_number,
+    episodeNumber: isMovie ? undefined : rawMetadata.episode_number,
     episodeTitle: isMovie ? undefined : sanitizeString(episode.title),
   };
 };
@@ -44,9 +67,9 @@ const convertDownloadToPlayback = (audioUrl: string, videoUrl: string): string =
   try {
     const url = new URL(audioUrl);
     const playbackUrl = new URL(videoUrl);
-    url.pathname = url.pathname.replace('/manifest/download/', '/manifest/');
-    url.searchParams.delete('downloadGuid');
-    url.searchParams.set('playbackGuid', playbackUrl.searchParams.get('playbackGuid') as string);
+    url.pathname = url.pathname.replace("/manifest/download/", "/manifest/");
+    url.searchParams.delete("downloadGuid");
+    url.searchParams.set("playbackGuid", playbackUrl.searchParams.get("playbackGuid") as string);
     return url.toString();
   } catch {
     return audioUrl;
@@ -57,19 +80,19 @@ const getEpisodeSource = async (episodeId: string, args: Options) => {
   let videoPlayPlatform: string = PLAY_PLATFORMS.androidtv;
   let audioPlayPlatform: string = PLAY_PLATFORMS.android;
 
-  if (!localStorage.getItem('scope')?.includes('offline_access')) {
+  if (!localStorage.getItem("scope")?.includes("offline_access")) {
     audioPlayPlatform = PLAY_PLATFORMS.androidtv;
     console.warn(
       '192 kb/s audio downloads are not available on your current Crunchyroll plan. Please upgrade to the "Mega Fan" plan to enable this feature. Falling back to 128 kb/s CBR stream.',
     );
   }
 
-  const videoPlay = await fetchPlayback(episodeId, videoPlayPlatform, 'play');
-  const audioPlay = await fetchPlayback(episodeId, audioPlayPlatform, 'download');
+  const videoPlay = await fetchPlayback(episodeId, videoPlayPlatform, "play");
+  const audioPlay = await fetchPlayback(episodeId, audioPlayPlatform, "download");
   videoPlay.url = convertDownloadToPlayback(audioPlay.url, videoPlay.url);
 
-  if (videoPlay.error === 'TOO_MANY_ACTIVE_STREAMS') {
-    console.warn('Too many active streams. Revoking all active streams...');
+  if (videoPlay.error === "TOO_MANY_ACTIVE_STREAMS") {
+    console.warn("Too many active streams. Revoking all active streams...");
     for (const activeStream of videoPlay.activeStreams) {
       await revokePlayData(activeStream.contentId, activeStream.token);
     }
@@ -103,33 +126,33 @@ const getEpisodeSource = async (episodeId: string, args: Options) => {
   }
 
   if (args.hardsub) {
-    let hardsubUrl = '';
+    let hardsubUrl = "";
     for (const hardsub of Object.values(data.hardSubs) as any[]) {
       const matchHardsubLang =
         !args.subtitleLanguages?.length ||
         args.subtitleLanguages.some((lang: string) => hardsub.hlang.includes(lang));
       if (matchHardsubLang) hardsubUrl = hardsub.url;
     }
-    if (!hardsubUrl) console.warn('No suitable hardsub stream found');
+    if (!hardsubUrl) console.warn("No suitable hardsub stream found");
     else data.url = hardsubUrl;
   }
 
   return {
     url: data.url,
     headers: {
-      Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-      'User-Agent': USER_AGENT,
+      Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+      "User-Agent": USER_AGENT,
     },
     drmConfig: {
       server: ROUTES.widevine,
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-        'User-Agent': USER_AGENT,
-        Pragma: 'no-cache',
-        'Cache-Control': 'no-cache',
-        'content-type': 'application/octet-stream',
-        'x-cr-content-id': data.guid || episodeId,
-        'x-cr-video-token': videoPlay.token,
+        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        "User-Agent": USER_AGENT,
+        Pragma: "no-cache",
+        "Cache-Control": "no-cache",
+        "content-type": "application/octet-stream",
+        "x-cr-content-id": data.guid || episodeId,
+        "x-cr-video-token": videoPlay.token,
       },
     },
     subtitles,
@@ -140,7 +163,7 @@ const getEpisodeIdsBySeries = async (seriesId: string, args: Options) => {
   const response = await fetchSeriesSeasons(seriesId);
   const seasons = response.data;
   if (!seasons?.length) {
-    console.error('No seasons found');
+    console.error("No seasons found");
     return [];
   }
 
@@ -165,8 +188,11 @@ const getEpisodeIdsBySeries = async (seriesId: string, args: Options) => {
 
   if (!episodes.length) {
     const availableSeasons = seasons
-      .map((s: any) => `S${s.season_number.toString().padStart(2, '0')} (${getAudioLocales(s.versions)})`)
-      .join(', ');
+      .map(
+        (s: any) =>
+          `S${s.season_number.toString().padStart(2, "0")} (${getAudioLocales(s.versions)})`,
+      )
+      .join(", ");
     console.error(`No suitable episodes found. Available seasons: ${availableSeasons}`);
     return [];
   }
@@ -174,39 +200,42 @@ const getEpisodeIdsBySeries = async (seriesId: string, args: Options) => {
   return episodes.map((episode: any) => episode.id);
 };
 
-export default defineExtension({
-  async setup() {
+export default defineExtension<SharedContext>({
+  async initialize() {
     await updateAuthorizationHeader();
     await signIn();
   },
 
-  async resolveEntries(url, options) {
+  async getEntries({ url, options }) {
     const cms = getCms();
     if (!cms.bucket) {
-      console.error('CMS bucket not found');
+      console.error("CMS bucket not found");
       return [];
     }
 
-    const episodeId = url.split('watch/')[1]?.split('/')[0];
-    const seriesId = url.split('series/')[1]?.split('/')[0];
-    const results: MediaEntry[] = [];
+    const episodeId = url.split("watch/")[1]?.split("/")[0];
+    const seriesId = url.split("series/")[1]?.split("/")[0];
+    const results: MediaEntry<SharedContext>[] = [];
     const languages = structuredClone(options.languages || []);
-    if (!languages.length) languages.push('ja-JP');
+    if (!languages.length) languages.push("ja-JP");
 
     for (const language of languages) {
       if (episodeId) {
         const entry = await getEpisodeMetadata(episodeId);
         results.push({
           ...entry,
-          details: { contentId: episodeId, language },
+          context: { contentId: episodeId, language },
         });
       } else if (seriesId) {
-        const episodeIds = await getEpisodeIdsBySeries(seriesId, { ...options, languages: [language] });
+        const episodeIds = await getEpisodeIdsBySeries(seriesId, {
+          ...options,
+          languages: [language],
+        });
         for (const currentEpisodeId of episodeIds) {
           const entry = await getEpisodeMetadata(currentEpisodeId);
           results.push({
             ...entry,
-            details: { contentId: currentEpisodeId, language },
+            context: { contentId: currentEpisodeId, language },
           });
         }
       }
@@ -215,21 +244,20 @@ export default defineExtension({
     return results;
   },
 
-  async resolveMedia(_url, options, entry) {
-    const contentId = entry.details?.contentId;
-    if (typeof contentId !== 'string') {
-      console.error('Crunchyroll content ID is missing');
-      return null;
+  async resolveEntry({ options, entry }) {
+    const contentId = entry.context?.contentId;
+    if (typeof contentId !== "string") {
+      throw new Error("Crunchyroll content ID is missing");
     }
 
-    const language = entry.details?.language;
+    const language = entry.context?.language;
     const source = await getEpisodeSource(contentId, {
       ...options,
-      languages: typeof language === 'string' ? [language] : options.languages,
+      languages: typeof language === "string" ? [language] : options.languages,
     });
 
-    entry.details = {
-      ...entry.details,
+    entry.context = {
+      ...entry.context,
       drmConfig: source.drmConfig,
     };
 
@@ -247,16 +275,17 @@ export default defineExtension({
       });
     }
 
-    return input;
+    return { entry, input };
   },
 
   auth: {
     async getState() {
-      return { authenticated: !!localStorage.getItem('accessToken') };
+      return { authenticated: !!localStorage.getItem("accessToken") };
     },
-    async login(credentials) {
+    async login(request) {
       await updateAuthorizationHeader();
-      await signIn(credentials.username, credentials.password);
+      if (request.method === "password") await signIn(request.username, request.password);
+      else await signIn();
     },
     async logout() {
       await signOut();
@@ -264,19 +293,19 @@ export default defineExtension({
   },
 
   drm: {
-    async getLicense(request) {
-      if (request.system !== 'widevine') {
+    async requestLicense(request) {
+      if (request.system !== "widevine") {
         throw new Error(`Unsupported DRM system: ${request.system}`);
       }
 
-      const drmConfig = request.entry.details?.drmConfig;
+      const drmConfig = request.resource.entry.context?.drmConfig;
       const url = drmConfig?.server;
       if (!url) {
-        throw new Error('Crunchyroll DRM config is missing on the resolved entry');
+        throw new Error("Crunchyroll DRM config is missing on the resolved entry");
       }
 
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: drmConfig.headers,
         body: request.data as any,
       });

@@ -1,11 +1,17 @@
 import { expect, test } from 'vitest';
-import crunchyroll from '../crunchyroll';
 
-test('exports ExtensionV2 hooks', () => {
+globalThis.Azot = {
+  defineExtension: (extension: unknown) => extension,
+  utils: {},
+};
+
+test('exports ExtensionV2 hooks', async () => {
+  const { default: crunchyroll } = await import('../crunchyroll');
+
   expect(crunchyroll).toBeDefined();
-  expect(crunchyroll).toHaveProperty('setup');
-  expect(crunchyroll).toHaveProperty('resolveEntries');
-  expect(crunchyroll).toHaveProperty('resolveMedia');
+  expect(crunchyroll).toHaveProperty('initialize');
+  expect(crunchyroll).toHaveProperty('getEntries');
+  expect(crunchyroll).toHaveProperty('resolveEntry');
   expect(crunchyroll).toHaveProperty('auth');
   expect(crunchyroll).toHaveProperty('drm');
 });
